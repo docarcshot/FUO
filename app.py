@@ -223,30 +223,60 @@ def build_differential(inputs):
 
 
 # --- ORDER ENGINE ---
-def build_orders(active, prior_neg):
-    # Tiers: 0 = immediate baseline, 1 = targeted labs, 2 = imaging, 3 = invasive
-    orders_by_tier = {0: set(BASELINE_ORDERS), 1: set(), 2: set(), 3: set()}
+def build_orders(active, prior_neg, suspect_rheum=False):
+    orders_by_tier = {
+        0: set(BASELINE_ORDERS),
+        1: set(),
+        2: set(),
+        3: set(),
+    }
 
-    # Add appropriate orders
+    # collect raw orders
     for item in active:
         for order_name, tier in item["orders"]:
             orders_by_tier[tier].add(order_name)
 
-    # Remove prior negatives
+    # --- RHEUMATOLOGY GATE ---
+    rheum_tests = {
+        "ANA",
+        "RF",
+        "CCP",
+        "C3/C4",
+        "ENA cascade",
+        "ANA (IFA)",
+        "Anti-CCP",
+    }
+
+    # determine if rheum should be forced on
+    rheum_forced = any(
+        dx["dx"] in [
+            "Adult Still disease",
+            "Temporal arteritis (GCA)",
+            "Systemic Lupus (SLE)"
+        ]
+        for dx in active
+    )
+
+    # apply suppression if rheum not suspected and not forced
+    if not suspect_rheum and not rheum_forced:
+        for tier in [1, 2]:
+            orders_by_tier[tier] = {
+                o for o in orders_by_tier[tier]
+                if not any(rt in o for rt in rheum_tests)
+            }
+
+    # --- PRIOR NEGATIVES REMOVAL ---
     already_done = set()
     for label in prior_neg:
-        mapped = PRIOR_MAP.get(label, [])
-        already_done.update(mapped)
+        already_done.update(PRIOR_MAP.get(label, []))
 
     for tier in orders_by_tier:
-        filtered = set()
-        for o in orders_by_tier[tier]:
-            if not any(done in o for done in already_done):
-                filtered.add(o)
-        orders_by_tier[tier] = filtered
+        orders_by_tier[tier] = {
+            o for o in orders_by_tier[tier]
+            if not any(p in o for p in already_done)
+        }
 
     return orders_by_tier
-
 
 # --- NOTE BUILDER ---
 def build_note(inputs, active, orders):
@@ -524,7 +554,7 @@ if run:
     }
 
     active = build_differential(inputs)
-    orders = build_orders(active, prior_neg)
+    orders = build_orders(active, prior_neg, suspect_rheum=suspect_rheum)
     note_text = build_note(inputs, active, orders)
 
     col1, col2 = st.columns(2)
