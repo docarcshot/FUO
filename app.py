@@ -1,7 +1,7 @@
 import streamlit as st
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="ID-CDSS | Director Suite", layout="wide")
+st.set_page_config(page_title="ID-CDSS | Medical Director Ed.", layout="wide")
 
 # --- STYLES ---
 st.markdown("""
@@ -11,64 +11,88 @@ st.markdown("""
     .tier2 { border-left: 6px solid #ffc107; padding: 10px; background-color: #fffbe6; }
     .tier3 { border-left: 6px solid #dc3545; padding: 10px; background-color: #fff1f0; }
     .alert { color: #721c24; background-color: #f8d7da; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
+    .stExpander { border: 1px solid #e0e0e0; border-radius: 5px; }
 </style>
 """, unsafe_allow_html=True)
+
+# --- MAPPING: RESULT INPUT -> ORDER TO REMOVE ---
+# This allows the user to select "Negative Blood Cx" and the system knows to remove "Blood Cx" from the plan.
+PRIOR_MAP = {
+    "Negative Blood Cx x3": "Blood Cx x3",
+    "Negative HIV Screen": "HIV 1/2 Ag/Ab",
+    "Negative Syphilis Screen": "Syphilis IgG",
+    "Normal CT Chest/Abd/Pelvis": "CT Chest/Abd/Pelvis",
+    "Normal TTE": "TTE",
+    "Normal TEE": "TEE",
+    "Negative ANA": "ANA",
+    "Normal Ferritin": "Ferritin"
+}
 
 # --- DATABASE ---
 DATABASE = [
     {
-        "dx": "Drug-Induced Fever",
-        "triggers": ["New Beta-Lactam", "New Anticonvulsant", "New Sulfa Drug", "Eosinophilia", "Relative Bradycardia"],
-        "pearl": "Diagnosis of exclusion: typical onset ~7-10 days; resolves ~48-72 h after discontinuation.",
-        "orders": [("Discontinue Suspect Agent (Washout)", 0)]
-    },
-    {
         "dx": "DRESS Syndrome",
-        "triggers": ["New Anticonvulsant", "Allopurinol", "Rash (General)", "Eosinophilia", "Hepatodynia", "Lymphadenopathy"],
-        "pearl": "Latency most often 2-6 weeks (though <2 wks possible); rash + eosinophilia + organ involvement typical.",
+        # Toned down: Only triggers if highly specific signs present
+        "triggers": ["Rash (Diffuse)", "Eosinophilia", "Hepatodynia"], 
+        "req_med": True, # Hard requirement for new med
+        "pearl": "Requires drug exposure (2-8 wk latency). Do not diagnose without rash/systemic signs.",
         "orders": [("CBC (Eosinophils)", 1), ("LFTs", 1), ("HHV-6 PCR", 1)]
     },
     {
         "dx": "Q Fever (Coxiella)",
-        "triggers": ["Farm Animals", "Parturient Animals", "Wind/Dust"],
-        "pearl": "Culture-neg endocarditis; “doughnut” granulomas.",
+        "triggers": ["Farm Animals", "Parturient Animals", "Dust/Wind Exposure"],
+        "req_med": False,
+        "pearl": "Culture-neg endocarditis. Doughnut granulomas.",
         "orders": [("Coxiella Serology", 1), ("TTE", 2)]
     },
     {
         "dx": "Brucellosis",
-        "triggers": ["Unpasteurized Dairy", "Livestock", "Travel (Mexico/Med)"],
-        "pearl": "Undulating fever. Spine osteomyelitis common.",
-        "orders": [("Brucella Serology", 1), ("Blood Cx x3", 1)]
+        "triggers": ["Unpasteurized Dairy", "Livestock", "Travel (Mexico/Med)", "Back Pain (Lumbar)"],
+        "req_med": False,
+        "pearl": "Undulating fever. Osteomyelitis (Spine).",
+        "orders": [("Brucella Serology", 1), ("Blood Cx (Hold 21d)", 1)]
     },
     {
         "dx": "Bartonella",
         "triggers": ["Cats (Scratch/Bite)", "Homelessness (Lice)"],
-        "pearl": "Culture-negative endocarditis in homeless/cat exposures.",
+        "req_med": False,
+        "pearl": "Culture-neg endocarditis.",
         "orders": [("Bartonella Serology", 1)]
     },
     {
         "dx": "Histoplasmosis (Dissem)",
-        "triggers": ["Bird/Bat Droppings", "Spelunking", "Pancytopenia"],
-        "pearl": "MO/Ohio endemic; can mimic adrenal insufficiency.",
+        "triggers": ["Bird/Bat Droppings", "Spelunking", "Pancytopenia", "Oral Ulcers", "Splenomegaly"],
+        "req_med": False,
+        "pearl": "MO Endemic. Adrenal insufficiency mimic.",
         "orders": [("Urine/Serum Histo Ag", 1), ("Ferritin", 1)]
     },
     {
         "dx": "Temporal Arteritis (GCA)",
-        "triggers": ["Jaw Claudication", "Vision Changes", "Age >50", "New Headache"],
-        "pearl": "Emergency — high ESR/CRP.",
+        "triggers": ["Jaw Claudication", "Vision Changes", "Age > 50", "New Headache"],
+        "req_med": False,
+        "pearl": "Emergency. High ESR.",
         "orders": [("ESR & CRP", 1), ("Temporal Artery US", 2), ("Temporal Artery Bx", 3)]
     },
     {
         "dx": "Infectious Endocarditis",
         "triggers": ["New Murmur", "Splinter Hemorrhages", "Prosthetic Valve", "IV Drug Use"],
-        "pearl": "Duke Criteria; TEE preferred in prosthetic valve/IVDU.",
+        "req_med": False,
+        "pearl": "Duke Criteria. TTE insensitive for prosthetics.",
         "orders": [("Blood Cx x3", 0), ("TTE", 2), ("TEE", 3)]
     },
     {
         "dx": "Malignancy (Lymphoma/RCC)",
-        "triggers": ["Weight Loss >10%", "Night Sweats", "Hematuria"],
-        "pearl": "If infection work-up negative consider malignancy; naproxen test optional.",
+        "triggers": ["Weight Loss >10%", "Night Sweats", "Hematuria", "Splenomegaly"],
+        "req_med": False,
+        "pearl": "Consider Naproxen Test if workup negative.",
         "orders": [("LDH", 1), ("CT Chest/Abd/Pelvis", 2), ("Naproxen Challenge", 1)]
+    },
+    {
+        "dx": "Adult Onset Still's",
+        "triggers": ["Ferritin > 1000", "Salmon Rash", "Joint Pain (Arthralgia)", "Sore Throat"],
+        "req_med": False,
+        "pearl": "Yamaguchi Criteria. Diagnosis of exclusion.",
+        "orders": [("Ferritin", 1), ("Glycosylated Ferritin", 1)]
     }
 ]
 
@@ -76,8 +100,8 @@ DATABASE = [
 def get_plan(inputs):
     active_dx = []
     orders = {0: set(), 1: set(), 2: set(), 3: set()}
-
-    # Universal baseline orders
+    
+    # Universal Baseline
     orders[0].add("Blood Cx x3")
     orders[0].add("HIV 1/2 Ag/Ab")
     orders[0].add("Syphilis IgG")
@@ -91,199 +115,211 @@ def get_plan(inputs):
                 score += 1
                 triggers.append(t)
 
-        # Stricter gating: DRESS
-        if d["dx"] == "DRESS Syndrome" and inputs["meds"]:
-            days = inputs.get("days_since_new_med")
-            if days is not None and 14 <= days <= 42:
-                score += 2
+        # --- DRESS LOGIC (TONED DOWN) ---
+        if d["dx"] == "DRESS Syndrome":
+            # Must have Meds + (Rash OR Eos OR LFTs)
+            if inputs["meds"] and score >= 1:
+                # Calculate strict latency (2-8 weeks)
+                days = inputs["days_since_new_med"]
+                if days and 14 <= days <= 60:
+                    score += 2 # Boost only if perfect timing
+                elif days and (days < 5 or days > 90):
+                    score = 0 # Hard Kill if timing impossible
             else:
-                # require key features for weaker latency
-                if not ("Rash (General)" in inputs["symptoms"] and "Eosinophilia" in inputs["symptoms"]):
-                    score = 0
-                    # keep pearl unchanged
-                else:
-                    d["pearl"] = "⚠️ Typical latency 2-8 weeks; clinical correlation required."
-
-        # Drug-Induced Fever timing adjustment
-        if d["dx"] == "Drug-Induced Fever" and inputs["meds"]:
-            days = inputs.get("days_since_new_med")
-            if days is not None and days > 21:
-                d["pearl"] += " (Latency >21 d makes this less likely.)"
-                score -= 1
-
-        # Infectious Endocarditis enhancement
+                score = 0 # Kill if no meds
+        
+        # --- ENDOCARDITIS LOGIC ---
         if d["dx"] == "Infectious Endocarditis":
             has_prosthetic = "Prosthetic Valve" in inputs["social"]
-            has_ivdu = "IV Drug Use" in inputs["social"]
-            if has_prosthetic or has_ivdu:
-                if score == 0:
-                    score = 1
-                    triggers.append("High-Risk Substrate (Prosthetic/IVDU)")
             if has_prosthetic:
-                orders_for_dx = [("Blood Cx x3", 0), ("TEE", 3)]
-            else:
-                orders_for_dx = d["orders"]
-        else:
-            orders_for_dx = d["orders"]
-
-        # GCA age filter
-        if d["dx"] == "Temporal Arteritis (GCA)" and inputs["age"] < 50:
+                d['orders'] = [("Blood Cx x3", 0), ("TEE", 3)] # Skip TTE
+                if score == 0: score = 1 # Force inclusion if prosthetic
+                
+        # --- GCA AGE FILTER ---
+        if d['dx'] == "Temporal Arteritis (GCA)" and inputs['age'] < 50:
             score = 0
 
         if score > 0:
             active_dx.append({"dx": d["dx"], "triggers": triggers, "pearl": d["pearl"]})
-            for test, tier in orders_for_dx:
+            for test, tier in d['orders']:
                 orders[tier].add(test)
 
-    # Antibiotic hold if on empiric
+    # ANTIBIOTIC LOGIC
     if inputs["on_abx"]:
-        active_dx.insert(0, {"dx": "Medication Effect / Masked Fever",
-                             "triggers": ["Currently on Antibiotics"],
-                             "pearl": "Empiric antibiotics may mask culture results and fever curves."})
-        orders[0].add("STOP/HOLD Empiric Antibiotics (48 h washout)")
+        active_dx.insert(0,
+            {"dx": "Medication Effect / Masked Fever",
+             "triggers": ["Currently on Antibiotics"],
+             "pearl": "Empiric antibiotics may mask culture results and fever curves."})
+        
+        # Doxycycline Pearl
+        if "Doxycycline" in inputs["abx_name"]:
+            active_dx[0]['pearl'] += " (Failure of Doxycycline lowers likelihood of Rickettsia/Ehrlichia)."
+            
+        orders[0].add("STOP/HOLD Empiric Antibiotics (48hr washout)")
 
-    # Remove prior work-up
+    # STEWARDSHIP (Mapping Results to Orders)
+    items_to_remove = set()
+    for result in inputs["prior_workup"]:
+        if result in PRIOR_MAP:
+            items_to_remove.add(PRIOR_MAP[result])
+            
     for t in orders:
-        orders[t] -= inputs["prior_workup"]
+        orders[t] -= items_to_remove
 
-    # Escalation rule for PET/CT
-    if "CT Chest/Abd/Pelvis" in inputs["prior_workup"]:
+    # ESCALATION LOGIC
+    if "Normal CT Chest/Abd/Pelvis" in inputs["prior_workup"]:
         orders[3].add("FDG-PET/CT (Whole Body)")
-
-    # Naproxen test for malignancy context
-    if any("Malignancy" in dx["dx"] for dx in active_dx) and not inputs["on_abx"]:
-        orders[1].add("Naproxen Test (375 mg BID ×3 days)")
 
     return active_dx, orders
 
 def generate_note(inputs, active_dx, orders):
-    txt = (f"ID Consult Note\nPatient: {inputs['age']}yo {inputs['sex']} | Immune: {inputs['immune']}\n"
-           f"Duration of fever: {inputs['duration_fever_days']} days | Days since new med: {inputs.get('days_since_new_med','N/A')} days\n\n"
-           "Assessment & Differential:\n")
+    txt = f"**ID Consult Note**\n"
+    txt += f"**Pt:** {inputs['age']}yo {inputs['sex']} | **Immune:** {inputs['immune']}"
+    if inputs['immune'] == "HIV Positive": txt += f" (CD4: {inputs['cd4']})"
+    txt += "\n\n"
+    
+    txt += "**History of Present Illness:**\n"
+    txt += f"Fever duration: {inputs['duration_fever_days']} days. "
+    if inputs['on_abx']: txt += f"Currently on {inputs['abx_name'] or 'Antibiotics'}. "
+    txt += "\n\n"
+    
+    txt += "**Pertinent Positives:**\n"
+    positives = [x for x in inputs['all_positives'] if x]
+    txt += ", ".join(positives) + "\n\n"
+
+    txt += "**Assessment & Differential:**\n"
     if active_dx:
         for d in active_dx:
-            triggers_str = ", ".join(d["triggers"]) if d["triggers"] else "clinical context"
-            txt += f"- {d['dx']}: {triggers_str}\n"
+            txt += f"- **{d['dx']}**: {', '.join(d['triggers'])}\n"
     else:
         txt += "- True FUO. No specific syndromic matches identified.\n"
 
-    txt += "\nPlan:\n"
-    if "STOP/HOLD Empiric Antibiotics (48 h washout)" in orders[0]:
-        txt += "1. Therapeutic hold: Discontinue empiric antibiotics to define fever curve and allow recultures.\n"
-    txt += "2. Diagnostic work-up:\n"
+    txt += "\n**Plan:**\n"
+    if "STOP/HOLD Empiric Antibiotics (48hr washout)" in orders[0]:
+        txt += "1. **THERAPEUTIC HOLD:** Discontinue empiric antibiotics.\n"
+    
+    txt += "2. **Diagnostic Workup:**\n"
     all_orders = []
-    for t in [0,1,2,3]:
-        all_orders.extend(orders[t])
-    all_orders = [o for o in all_orders if "STOP/HOLD" not in o]
+    for t in [0,1,2,3]: all_orders.extend(orders[t])
+    all_orders = [o for o in all_orders if "STOP" not in o]
+    
     for o in sorted(set(all_orders)):
         txt += f"- [ ] {o}\n"
     return txt
-
-# --- SESSION HISTORY ---
-if "history" not in st.session_state:
-    st.session_state["history"] = []
 
 # --- UI SIDEBAR ---
 with st.sidebar:
     st.title("Patient Data")
     if st.button("Clear All Inputs"):
         st.session_state.clear()
-        st.experimental_rerun()
+        st.rerun()
 
+    # 1. DEMOGRAPHICS
     c1, c2 = st.columns(2)
-    age = c1.number_input("Age", 18, 100, 50, help="Patient age in years")
+    age = c1.number_input("Age", 18, 100, 50)
     sex = c2.selectbox("Sex", ["Male", "Female"])
-    immune = st.selectbox("Immune", ["Immunocompetent", "HIV+", "Transplant"])
+    immune = st.selectbox("Immune", ["Immunocompetent", "HIV Positive", "Transplant"])
+    
+    cd4 = 1000
+    # CD4 SLIDER - VISIBLE IMMEDIATELY
+    if immune == "HIV Positive":
+        cd4 = st.slider("CD4 Count", 0, 1200, 450)
 
-    st.header("1. Meds & History")
-    on_abx = st.checkbox("Currently on Antibiotics?", help="Is patient on empiric or ongoing antibiotics?")
-    meds = st.multiselect("New/High-Risk Meds", ["New Beta-Lactam", "New Anticonvulsant", "New Sulfa Drug", "Allopurinol"],
-                         help="Select recent initiation of higher-risk drugs")
+    # 2. MEDS & ABX
+    st.header("Meds & History")
+    on_abx = st.checkbox("Currently on Antibiotics?")
+    abx_name = ""
+    if on_abx:
+        abx_name = st.text_input("Antibiotic Name (Optional)", placeholder="e.g., Doxycycline, Zosyn")
+        
+    meds = st.multiselect("New/High-Risk Meds", ["New Beta-Lactam", "New Anticonvulsant", "New Sulfa Drug", "Allopurinol"])
     days_since_new_med = None
     if meds:
-        days_since_new_med = st.number_input("Days since new/high-risk med started", 0, 365, 0,
-                                             help="Enter days since drug started")
+        days_since_new_med = st.number_input("Days since started", 0, 365, 0)
+        
+    duration_fever_days = st.number_input("Duration of fever (days)", 0, 365, 14)
 
-    st.header("2. Duration & Timing")
-    duration_fever_days = st.number_input("Duration of fever (in days)", 0, 365, 7,
-                                          help="Enter number of days patient has had documented fever")
+    # 3. PRIOR WORKUP (RESULTS BASED)
+    st.header("Prior Workup (Results)")
+    # Renamed to reflect results, not just orders
+    pw_opts = [
+        "Negative Blood Cx x3", "Negative HIV Screen", "Negative Syphilis Screen",
+        "Normal CT Chest/Abd/Pelvis", "Normal TTE", "Normal TEE", "Negative ANA", "Normal Ferritin"
+    ]
+    prior_workup = st.multiselect("Select Negative/Normal Results:", pw_opts)
 
-    st.header("3. Prior Work-up")
-    prior_workup = st.multiselect("Already Done", ["Blood Cx x3", "HIV 1/2 Ag/Ab", "Syphilis IgG",
-                                                    "CT Chest/Abd/Pelvis", "TTE", "TEE"],
-                                   help="Select any tests/imaging already completed")
+    # 4. REVIEW OF SYSTEMS (CATEGORIZED)
+    st.header("Review of Systems")
+    
+    with st.expander("General / HEENT", expanded=False):
+        ros_gen = st.multiselect("Constitutional", ["Night Sweats", "Weight Loss >10%", "Fatigue", "New Headache"])
+        ros_heent = st.multiselect("Head/Neck", ["Jaw Claudication", "Vision Changes", "Sore Throat", "Oral Ulcers", "Neck Pain"])
+        
+    with st.expander("CV / Pulmonary", expanded=False):
+        ros_cv = st.multiselect("Cardiopulmonary", ["New Murmur", "Splinter Hemorrhages", "Cough", "Hemoptysis"])
+        
+    with st.expander("GI / GU", expanded=False):
+        ros_gi = st.multiselect("Abdominal", ["Abd Pain", "Diarrhea", "Hepatodynia", "Hematuria"])
+        
+    with st.expander("Neuro / MSK / Derm", expanded=False):
+        ros_msk = st.multiselect("MSK/Derm", ["Joint Pain (Arthralgia)", "Back Pain (Lumbar)", "Rash (Diffuse)", "Salmon Rash", "Verrucous Lesions"])
+        
+    with st.expander("Labs (Objective)", expanded=False):
+        ros_labs = st.multiselect("Lab Findings", ["Eosinophilia", "Pancytopenia", "Ferritin > 1000", "Splenomegaly"])
 
-    st.header("4. Exposures")
-    with st.expander("Animals", expanded=False):
-        cats = st.checkbox("Cats (Scratch/Bite)", help="Cat scratch or bite exposure")
-        livestock = st.checkbox("Farm Animals", help="Livestock exposure e.g., brucella")
-        birds = st.checkbox("Birds/Bats", help="Bird/bat droppings or cave exposure")
-        ticks = st.checkbox("Ticks", help="Tick bite or vector exposure")
-
-    social = st.multiselect("Social/Env", ["Unpasteurized Dairy", "Travel (Mexico/Med)", "Prosthetic Valve", "IV Drug Use", "Homelessness (Lice)"],
-                             help="Select relevant social or environmental exposures")
-
-    st.header("5. Symptoms")
-    symptoms = st.multiselect("Review of Systems",
-                              ["New Murmur", "Jaw Claudication", "Vision Changes", "Weight Loss >10%",
-                               "Night Sweats", "Rash (General)", "Eosinophilia", "Hepatodynia", "Hematuria", "Pancytopenia"],
-                              help="Select relevant symptoms or lab abnormalities")
+    # 5. EXPOSURES
+    st.header("Exposures")
+    with st.expander("Vectors", expanded=False):
+        cats = st.checkbox("Cats (Scratch/Bite)")
+        livestock = st.checkbox("Farm Animals")
+        birds = st.checkbox("Birds/Bats")
+        ticks = st.checkbox("Ticks")
+    
+    social = st.multiselect("Social", ["Unpasteurized Dairy", "Travel (Mexico/Med)", "Prosthetic Valve", "IV Drug Use", "Homelessness (Lice)"])
 
     run = st.button("Generate Plan")
 
 # --- MAIN DISPLAY ---
-st.title("ID-CDSS | Director Suite")
+st.title("ID-CDSS | Director Suite v12")
 
 if run:
-    if duration_fever_days <= 0:
-        st.warning("Duration of fever is zero or less: please verify.")
-    if meds and days_since_new_med is None:
-        st.warning("New/high-risk med selected: please enter days since started.")
-
-    all_positives = meds + social + symptoms
-    if cats:
-        all_positives.append("Cats (Scratch/Bite)")
-    if livestock:
-        all_positives.append("Farm Animals")
-    if birds:
-        all_positives.append("Bird/Bat Droppings")
-    if ticks:
-        all_positives.append("Tick Bite")
+    # Input Aggregation
+    all_symptoms = ros_gen + ros_heent + ros_cv + ros_gi + ros_msk + ros_labs
+    all_positives = meds + social + all_symptoms
+    if cats: all_positives.append("Cats (Scratch/Bite)")
+    if livestock: all_positives.append("Farm Animals")
+    if birds: all_positives.append("Bird/Bat Droppings")
+    if ticks: all_positives.append("Tick Bite")
 
     inputs = {
-        "age": age,
-        "sex": sex,
-        "immune": immune,
-        "on_abx": on_abx,
-        "meds": meds,
-        "days_since_new_med": days_since_new_med,
+        "age": age, "sex": sex, "immune": immune, "cd4": cd4, 
+        "on_abx": on_abx, "abx_name": abx_name,
+        "meds": meds, "days_since_new_med": days_since_new_med,
         "duration_fever_days": duration_fever_days,
-        "all_positives": all_positives,
-        "social": social,
-        "symptoms": symptoms,
+        "all_positives": all_positives, "social": social,
         "prior_workup": set(prior_workup),
     }
 
     active_dx, orders = get_plan(inputs)
-    st.session_state["history"].append({"inputs": inputs, "dx": active_dx})
 
     col1, col2 = st.columns([1,1])
+
     with col1:
         if on_abx:
-            st.markdown("<div class='alert'>⚠️ STEWARDSHIP ALERT: Patient is on empiric antibiotics. Consider a 48-h hold to evaluate fever curve.</div>",
-                        unsafe_allow_html=True)
+            st.markdown("<div class='alert'>⚠️ **STEWARDSHIP:** Patient on antibiotics. Hold recommended.</div>", unsafe_allow_html=True)
+        
         st.subheader("Differential Logic")
         if not active_dx:
-            st.write("No specific syndromes triggered. Consider broad FUO protocol.")
+            st.write("No specific syndromes triggered. Proceed with broad FUO protocol.")
         else:
             for d in active_dx:
                 st.markdown(f"**{d['dx']}**")
-                st.caption(f"Triggers: {', '.join(d['triggers'])} | Pearl: {d['pearl']}")
+                st.caption(f"Trigger: {', '.join(d['triggers'])} | Pearl: {d['pearl']}")
 
     with col2:
         st.subheader("Staged Orders")
         st.markdown("<div class='tier0'>", unsafe_allow_html=True)
-        st.markdown("**Tier 0: Universal Baseline & Actions**")
+        st.markdown("**Tier 0: Universal Baseline**")
         for o in sorted(list(orders[0])):
             st.markdown(f"- [ ] **{o}**")
         st.markdown("</div><br>", unsafe_allow_html=True)
@@ -291,29 +327,22 @@ if run:
         if orders[1]:
             st.markdown("<div class='tier1'>", unsafe_allow_html=True)
             st.markdown("**Tier 1: Targeted Labs**")
-            for o in sorted(list(orders[1])):
-                st.markdown(f"- [ ] {o}")
+            for o in sorted(list(orders[1])): st.markdown(f"- [ ] {o}")
             st.markdown("</div><br>", unsafe_allow_html=True)
 
         if orders[2]:
             st.markdown("<div class='tier2'>", unsafe_allow_html=True)
             st.markdown("**Tier 2: Structural Imaging**")
-            for o in sorted(list(orders[2])):
-                st.markdown(f"- [ ] {o}")
+            for o in sorted(list(orders[2])): st.markdown(f"- [ ] {o}")
             st.markdown("</div><br>", unsafe_allow_html=True)
 
         if orders[3]:
             st.markdown("<div class='tier3'>", unsafe_allow_html=True)
-            st.markdown("**Tier 3: Escalation (High Cost/Risk)**")
-            for o in sorted(list(orders[3])):
-                st.markdown(f"- [ ] {o}")
+            st.markdown("**Tier 3: Escalation**")
+            for o in sorted(list(orders[3])): st.markdown(f"- [ ] {o}")
             st.markdown("</div>", unsafe_allow_html=True)
 
         note_text = generate_note(inputs, active_dx, orders)
-        st.download_button(label="Download Note", data=note_text, file_name="consult_note.txt", mime="text/plain", help="Download the consult note as a text file")
-        st.text_area("Consult Note", note_text, height=350)
-    
-# Sidebar: recent cases
-with st.sidebar.expander("Recent Cases", expanded=False):
-    for i, h in enumerate(reversed(st.session_state["history"][-5:])):
-        st.write(f"Case {len(st.session_state['history'])-i}: Age {h['inputs']['age']}yo | Dx: {[dx['dx'] for dx in h['dx']]}")
+        st.divider()
+        st.download_button(label="Download Note", data=note_text, file_name="consult_note.txt", mime="text/plain")
+        st.text_area("Consult Note", note_text, height=400)
