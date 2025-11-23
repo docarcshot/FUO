@@ -169,3 +169,31 @@ if run:
     if bats: positives.append("Bird/Bat")
     if dairy: positives.append("Unpasteurized Dairy")
     if livestock
+    if livestock: positives.append("Livestock")
+    if farm: positives.append("Farm Animals")
+    if medtrav: positives.append("Travel Med/Mexico")
+    if mo: positives.append("Missouri")
+
+    if immune == "HIV" and cd4 is not None:
+        if cd4 < 250: positives.append("CD4 < 250")
+        positives.append("HIV")
+
+    inputs = {
+        "age": age,
+        "sex": sex,
+        "immune": immune,
+        "cd4": cd4,
+        "positives": positives,
+    }
+
+    active = get_dx(inputs)
+    plan = build_plan(active, prior)
+
+    st.subheader("Differential")
+    for d in active:
+        st.markdown(f"**{d['dx']}** — triggers: {', '.join(d['triggers'])}")
+
+    st.subheader("Recommended Workup")
+    for o in plan:
+        st.markdown(f"- [ ] {o}")
+
