@@ -2,7 +2,7 @@ import streamlit as st
 import datetime
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="ID-CDSS | Immune Expansion", layout="wide")
+st.set_page_config(page_title="ID-CDSS | Director Gold Master", layout="wide")
 
 # --- STYLES ---
 st.markdown("""
@@ -14,6 +14,7 @@ st.markdown("""
     .critical { border-left: 6px solid #dc3545; padding: 10px; background-color: #ffe6e6; font-weight: bold; }
     .endemic { border-left: 6px solid #fd7e14; padding: 10px; background-color: #fff3cd; }
     .noninf { border-left: 6px solid #17a2b8; padding: 10px; background-color: #e0f7fa; }
+    .tropical { border-left: 6px solid #6610f2; padding: 10px; background-color: #e0cffc; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -22,7 +23,7 @@ def check_faget(tmax, hr):
     if tmax >= 102.0 and hr < 100: return True
     return False
 
-# --- MAPPING ---
+# --- MAPPING (Prior Workup Removal) ---
 PRIOR_MAP = {
     "Negative Blood Cx": ["Blood Cx", "Blood Cx x2", "Blood Cx x3", "Blood Cx (Hold 21d)"],
     "Negative HIV": ["HIV 1/2 Ag/Ab", "HIV 1/2 Ag/Ab (4th Gen)"],
@@ -30,18 +31,13 @@ PRIOR_MAP = {
     "Normal TTE": ["TTE"],
     "Negative O&P": ["Stool O&P", "Stool Pathogen Panel"],
     "Negative ANA/RF": ["ANA (IFA)", "Rheumatoid Factor", "Anti-CCP"],
-    "Negative Malaria Smear": ["Malaria Smear x3", "Rapid Antigen"]
+    "Negative Quantiferon": ["Quantiferon-TB Gold"],
+    "Negative Malaria": ["Malaria Smear x3", "Rapid Antigen"]
 }
 
-# --- DATABASE ---
+# --- MASTER DATABASE ---
 DATABASE = [
     # --- CRITICAL / URGENT ---
-    {
-        "dx": "Neutropenic Fever / Sepsis", "type": "CRITICAL",
-        "triggers": ["Chemotherapy", "Neutropenia", "Indwelling Line"],
-        "req_immune": "Chemo", # Only triggers for Chemo patients
-        "orders": [("Blood Cx x2 (Peripheral + Line)", 0), ("Empiric Cefepime/Zosyn", 0), ("Lactate", 0)]
-    },
     {
         "dx": "Hemophagocytic Lymphohistiocytosis (HLH)", "type": "CRITICAL",
         "triggers": ["Ferritin > 3000", "Pancytopenia", "Splenomegaly", "Hypertriglyceridemia"],
@@ -49,7 +45,7 @@ DATABASE = [
     },
     {
         "dx": "Rocky Mountain Spotted Fever", "type": "CRITICAL",
-        "triggers": ["Tick Bite (Dog/Wood)", "Rash (Palms/Soles)", "Hyponatremia"],
+        "triggers": ["Tick: Dog/Wood", "Rash (Palms/Soles)", "Hyponatremia", "Severe Headache"],
         "pearl": "Start Doxycycline immediately. Do not wait for serology.",
         "orders": [("START Doxycycline (Empiric)", 0), ("Rickettsia PCR", 1)]
     },
@@ -58,50 +54,120 @@ DATABASE = [
         "triggers": ["Travel (Sub-Saharan Africa)", "Travel (SE Asia)", "Travel (South America)"],
         "orders": [("Malaria Smear x3", 0), ("Rapid Antigen", 0)]
     },
-
-    # --- CHEMO / BIOLOGIC SPECIFIC (NEW) ---
     {
-        "dx": "Invasive Aspergillosis", "type": "Infectious",
-        "triggers": ["Chemotherapy", "Neutropenia", "Lung Transplant", "Biologics (TNFa)", "Hemoptysis"],
-        "pearl": "Halo sign on CT. Galactomannan in serum/BAL.",
-        "orders": [("Serum Galactomannan", 1), ("Chest CT (Halo Sign)", 2), ("Bronch w/ BAL", 3)]
+        "dx": "Acute HIV / Disseminated GC", "type": "CRITICAL",
+        "triggers": ["MSM", "High Risk Sex", "Transactional Sex", "Sick Contacts"],
+        "pearl": "Acute HIV mimics Mono. Dissem GC causes fever/tenosynovitis.",
+        "orders": [("HIV 1/2 Ag/Ab (4th Gen)", 0), ("HIV Viral Load (PCR)", 1), ("NAAT (GC/CT) All Sites", 1)]
     },
     {
-        "dx": "Hepatitis B Reactivation", "type": "Infectious",
-        "triggers": ["Biologics (Rituximab)", "Chemotherapy", "Elevated LFTs"],
-        "req_immune": "Biologics",
-        "pearl": "Rituximab (anti-CD20) carries high risk of HBV reactivation. Check core antibody.",
-        "orders": [("Hep B Core Ab (Total)", 1), ("Hep B Surface Ag", 1), ("HBV DNA", 1)]
-    },
-    {
-        "dx": "Invasive Candidiasis", "type": "Infectious",
-        "triggers": ["Chemotherapy", "Neutropenia", "TPN", "Central Line"],
-        "pearl": "Hepatosplenic Candida in leukemia recovery phase.",
-        "orders": [("Blood Cx", 0), ("Beta-D-Glucan", 1), ("TTE (R/O Endophthalmitis if +)", 2)]
+        "dx": "Vibrio vulnificus / Sepsis", "type": "CRITICAL",
+        "triggers": ["Raw Shellfish/Oysters", "Cirrhosis/Liver Disease"],
+        "pearl": "Life-threatening in cirrhotics. Bullous lesions.",
+        "orders": [("Blood Cx (Aerobic/Anaerobic)", 0), ("Wound Cx", 1)]
     },
 
-    # --- ENDEMIC FUNGAL ---
+    # --- HIV SPECIFIC OIs (CD4 Stratified) ---
+    {
+        "dx": "Pneumocystis jirovecii (PCP)", "type": "Infectious",
+        "triggers": ["Dyspnea", "Dry Cough", "Hypoxia", "LDH Elevation"],
+        "req_cd4_ceiling": 200,
+        "orders": [("Beta-D-Glucan", 1), ("LDH", 1), ("ABG", 1)]
+    },
+    {
+        "dx": "Toxoplasmosis", "type": "Infectious",
+        "triggers": ["Headache", "Seizure", "Vision Changes", "Neurologic Deficit"],
+        "req_cd4_ceiling": 100,
+        "orders": [("Toxo IgG", 1), ("MRI Brain", 2)]
+    },
+    {
+        "dx": "Disseminated MAC", "type": "Infectious",
+        "triggers": ["Night Sweats", "Weight Loss", "Severe Anemia", "Diarrhea", "Abd Pain"],
+        "req_cd4_ceiling": 50,
+        "orders": [("AFB Blood Cx", 1), ("CT Abd (Lymphadenopathy)", 2)]
+    },
+    {
+        "dx": "CMV (Retinitis/Colitis)", "type": "Infectious",
+        "triggers": ["Vision Changes", "Diarrhea", "Hepatodynia"],
+        "req_cd4_ceiling": 50,
+        "orders": [("CMV PCR", 1), ("Dilated Fundoscopy", 2)]
+    },
+
+    # --- TRANSPLANT SPECIFIC (Rubin's Timeline) ---
+    {
+        "dx": "Nosocomial Bacterial / Line Infection", "type": "Infectious",
+        "triggers": ["Indwelling Line"],
+        "req_tx_timeline": "<1 Month",
+        "orders": [("Blood Cx x2 (Line+Periph)", 0)]
+    },
+    {
+        "dx": "CMV Syndrome", "type": "Infectious",
+        "triggers": ["Leukopenia", "Thrombocytopenia", "Hepatodynia"],
+        "req_tx_timeline": "1-6 Months",
+        "orders": [("CMV PCR (Quant)", 1)]
+    },
+    {
+        "dx": "Post-Transplant Lymphoproliferative (PTLD)", "type": "Non-Infectious",
+        "triggers": ["Lymphadenopathy", "Weight Loss", "Fever", "EBV History"],
+        "req_tx_timeline": ">6 Months", # Or late 1-6
+        "orders": [("EBV PCR", 1), ("PET/CT", 3), ("Excisional Biopsy", 3)]
+    },
+
+    # --- ENDEMIC FUNGAL (MO BIAS) ---
     {
         "dx": "Histoplasmosis (Disseminated)", "type": "Endemic Fungal",
-        "triggers": ["Missouri Residence", "Biologics (TNFa)", "Chemotherapy", "Bird/Bat Droppings"],
-        "pearl": "TNF-alpha blockers release the 'brake' on granulomas.",
+        "triggers": ["Missouri Residence", "Bird/Bat Droppings", "Spelunking", "Pancytopenia", "Oral Ulcers", "Splenomegaly"],
         "orders": [("Urine/Serum Histo Ag", 1), ("Ferritin", 1)]
     },
     {
         "dx": "Blastomycosis", "type": "Endemic Fungal",
-        "triggers": ["Missouri Residence", "Decaying Wood", "Waterways", "Skin Lesions (Verrucous)"],
+        "triggers": ["Missouri Residence", "Decaying Wood", "Waterways", "Verrucous Lesions", "Pneumonia"],
         "orders": [("Urine Blasto Ag", 1), ("Sputum Fungal Cx", 1)]
+    },
+    {
+        "dx": "Coccidioidomycosis", "type": "Endemic Fungal",
+        "triggers": ["Travel (Southwest US)", "Dust Exposure", "Eosinophilia"],
+        "orders": [("Coccidioides Serology", 1)]
+    },
+
+    # --- VECTOR / ZOONOTIC ---
+    {
+        "dx": "Tularemia (Typhoidal)", "type": "Infectious",
+        "triggers": ["Relative Bradycardia", "Rabbit Exposure", "Lawn Mowing", "Tick: Dog/Wood"],
+        "orders": [("Tularemia Agglutination", 1)]
+    },
+    {
+        "dx": "Brucellosis", "type": "Infectious",
+        "triggers": ["Relative Bradycardia", "Unpasteurized Dairy", "Livestock", "Travel (Med/Mexico)", "Back Pain"],
+        "orders": [("Brucella Serology", 1), ("Blood Cx (Hold 21d)", 1)]
+    },
+    {
+        "dx": "Q Fever", "type": "Infectious",
+        "triggers": ["Farm Animals", "Rural Area", "Well Water", "Parturient Animals"],
+        "orders": [("Coxiella Serology", 1), ("TTE", 2)]
+    },
+    {
+        "dx": "Bartonella (Trench/Cat Scratch)", "type": "Infectious",
+        "triggers": ["Cats", "Homelessness", "Body Lice", "IV Drug Use"],
+        "orders": [("Bartonella Serology", 1)]
     },
 
     # --- TROPICAL / TRAVEL ---
     {
+        "dx": "Visceral Leishmaniasis (Kala-Azar)", "type": "Tropical",
+        "triggers": ["Military Service", "Travel (Middle East)", "Travel (South America)", "Splenomegaly", "Pancytopenia"],
+        "pearl": "Amastigotes in bone marrow.",
+        "orders": [("rK39 Dipstick", 2), ("Bone Marrow Biopsy", 3)]
+    },
+    {
         "dx": "Melioidosis", "type": "Tropical",
-        "triggers": ["Travel (SE Asia)", "Diabetes", "Pneumonia"],
+        "triggers": ["Travel (SE Asia)", "Diabetes", "Pneumonia", "Abscess (Any)"],
         "orders": [("Blood/Sputum Cx", 0), ("Burkholderia Serology", 1)]
     },
     {
         "dx": "Paracoccidioidomycosis", "type": "Tropical",
         "triggers": ["Travel (South America)", "Oral Ulcers", "Lymphadenopathy"],
+        "pearl": "Mariner's Wheel yeast.",
         "orders": [("Fungal Serologies", 1), ("Tissue Biopsy", 3)]
     },
     {
@@ -114,17 +180,44 @@ DATABASE = [
         "triggers": ["Travel (South America)", "Heart Failure", "Arrhythmia"],
         "orders": [("Trypanosoma cruzi Serology", 1)]
     },
+
+    # --- PARASITIC / DIETARY ---
     {
-        "dx": "Leishmaniasis", "type": "Tropical",
-        "triggers": ["Travel (Middle East)", "Travel (South America)", "Splenomegaly", "Pancytopenia"],
-        "orders": [("rK39 Dipstick", 2), ("Bone Marrow Biopsy", 3)]
+        "dx": "Strongyloidiasis", "type": "Infectious",
+        "triggers": ["Eosinophilia", "Travel (Tropics)", "Immunocompromised", "HTLV-1"],
+        "orders": [("Strongyloides IgG", 1), ("Stool O&P x3", 1)]
+    },
+    {
+        "dx": "Paragonimiasis", "type": "Infectious",
+        "triggers": ["Raw Crustaceans", "Hemoptysis", "Eosinophilia", "Travel (SE Asia)"],
+        "orders": [("Sputum O&P", 1), ("Paragonimus Serology", 2)]
+    },
+    {
+        "dx": "Trichinellosis", "type": "Infectious",
+        "triggers": ["Undercooked Pork/Game", "Eosinophilia", "Myalgia", "Periorbital Edema"],
+        "orders": [("CK Level", 1), ("Trichinella Serology", 1)]
     },
 
     # --- NON-INFECTIOUS ---
     {
-        "dx": "Kikuchi-Fujimoto", "type": "Non-Infectious",
+        "dx": "Kikuchi-Fujimoto Disease", "type": "Non-Infectious",
         "triggers": ["Cervical Lymphadenopathy", "Female Sex", "Age < 40"],
         "orders": [("Excisional Node Biopsy", 3)]
+    },
+    {
+        "dx": "Whipple's Disease", "type": "Infectious",
+        "triggers": ["Joint Pain (Migratory)", "Diarrhea", "Weight Loss", "CNS Symptoms"],
+        "orders": [("Whipple PCR", 2)]
+    },
+    {
+        "dx": "Factitious Fever", "type": "Non-Infectious",
+        "triggers": ["Healthcare Worker", "Polymicrobial Bacteremia", "Erratic Fever Curve"],
+        "orders": [("Supervised Temp Check", 0)]
+    },
+    {
+        "dx": "Drug-Induced Fever", "type": "Non-Infectious",
+        "triggers": ["Relative Bradycardia", "New Beta-Lactam", "New Anticonvulsant", "New Sulfa", "Eosinophilia"],
+        "orders": [("Discontinue Suspect Agent", 0)]
     },
     {
         "dx": "DRESS Syndrome", "type": "Non-Infectious",
@@ -138,16 +231,25 @@ DATABASE = [
         "orders": [("Liver Autoimmune Panel", 1)]
     },
     {
-        "dx": "Malignancy (Lymphoma)", "type": "Non-Infectious",
-        "triggers": ["Weight Loss", "Night Sweats", "Splenomegaly", "LDH Elevation"],
-        "orders": [("LDH", 1), ("CT Chest/Abd/Pelvis", 2)]
+        "dx": "Systemic Lupus (SLE)", "type": "Non-Infectious",
+        "triggers": ["Malar Rash", "Joint Pain", "Proteinuria", "Cytopenias"],
+        "orders": [("ANA (IFA)", 1), ("dsDNA", 2), ("C3/C4", 1)]
+    },
+    {
+        "dx": "Malignancy (Lymphoma/RCC)", "type": "Non-Infectious",
+        "triggers": ["Weight Loss", "Night Sweats", "Hematuria", "Splenomegaly"],
+        "orders": [("LDH", 1), ("CT Chest/Abd/Pelvis", 2), ("Naproxen Challenge", 1)]
+    },
+    {
+        "dx": "Temporal Arteritis (GCA)", "type": "Non-Infectious",
+        "triggers": ["Headache", "Jaw Claudication", "Vision Changes", "Age > 50"],
+        "orders": [("ESR & CRP", 1), ("Temporal Artery US", 2), ("Temporal Artery Bx", 3)]
     },
     
-    # --- STANDARD ---
+    # --- STANDARD INFECTIOUS ---
     {
-        "dx": "Tuberculosis", "type": "Infectious",
-        "triggers": ["TB Exposure", "Biologics (TNFa)", "Travel (Sub-Saharan Africa)", "Homelessness"],
-        "pearl": "High reactivation risk with TNF inhibitors.",
+        "dx": "Tuberculosis (Miliary)", "type": "Infectious",
+        "triggers": ["TB Exposure", "Homelessness", "Incarceration", "Travel (Sub-Saharan Africa)"],
         "orders": [("Quantiferon-TB Gold", 1), ("Sputum AFB x3", 1)]
     },
     {
@@ -157,7 +259,7 @@ DATABASE = [
     },
     {
         "dx": "Acute HIV / Syphilis", "type": "Infectious",
-        "triggers": ["MSM", "High Risk Sexual Activity", "Transactional Sex"],
+        "triggers": ["MSM", "High Risk Sex", "Transactional Sex"],
         "orders": [("HIV 1/2 Ag/Ab (4th Gen)", 0), ("Syphilis Cascade", 0)]
     }
 ]
@@ -170,22 +272,26 @@ def optimize_orders(raw_orders, inputs):
 
     # Superset Logic
     if any("Blood Cx" in x for x in all_items):
-        if "Chemotherapy" in inputs['immune']:
-            final_orders["Immediate"].add("Blood Cx x2 (Peripheral + Line)")
-        else:
-            final_orders["Immediate"].add("Blood Cx x3 (Hold 21d)")
+        final_orders["Immediate"].add("Blood Cx x3 (Hold 21d)")
     
     # Stool Logic
     has_eos = "Eosinophilia" in inputs['all_positives']
     if has_eos and (inputs['social'] or any(x in inputs['all_positives'] for x in ["Diarrhea", "Abd Pain"])):
         final_orders["Targeted"].add("Stool O&P x3")
 
+    # Panel Consolidations
+    if any("Liver Autoimmune" in x for x in all_items):
+        final_orders["Targeted"].add("Liver AI Panel (ANA, ASMA, AMA, IgG)")
+    if any("dsDNA" in x for x in all_items):
+        final_orders["Targeted"].add("Rheum Serologies (ANA, RF, CCP, C3/C4)")
+
     for item in all_items:
-        if any(x in item for x in ["Blood Cx", "Stool"]): continue
+        # Skip consolidated items
+        if any(x in item for x in ["Blood Cx", "Liver AI", "dsDNA", "Stool"]): continue
         
         if "Biopsy" in item or "rK39" in item: final_orders["Contingency"].add(item)
-        elif any(x in item for x in ["CT ", "TTE", "TEE"]): final_orders["Structural"].add(item)
-        elif any(x in item for x in ["CBC", "CMP", "ESR", "CRP", "HIV", "RPR", "UA", "Lactate"]): final_orders["Immediate"].add(item)
+        elif any(x in item for x in ["CT ", "TTE", "TEE", "MRI"]): final_orders["Structural"].add(item)
+        elif any(x in item for x in ["CBC", "CMP", "ESR", "CRP", "HIV", "RPR", "UA"]): final_orders["Immediate"].add(item)
         else: final_orders["Targeted"].add(item)
 
     # Stewardship
@@ -201,8 +307,9 @@ def get_differential(inputs):
     active_dx = []
     raw_orders = {"0": [], "1": [], "2": [], "3": []}
     
+    # Universal Baseline
     raw_orders["0"].extend(["CBC", "CMP", "ESR", "CRP", "UA"])
-    if any(r in inputs['all_positives'] for r in ["IV Drug Use", "MSM", "High Risk Sexual Activity"]):
+    if any(r in inputs['all_positives'] for r in ["IV Drug Use", "MSM", "High Risk Sex"]):
         raw_orders["0"].extend(["HIV 1/2 Ag/Ab", "Syphilis Cascade"])
 
     if check_faget(inputs['tmax'], inputs['hr']):
@@ -214,6 +321,7 @@ def get_differential(inputs):
         
         for t in d["triggers"]:
             if any(pos_t in t for pos_t in inputs["all_positives"]) or t in inputs["all_positives"]:
+                # Scoring Weights
                 if t == "Relative Bradycardia": score += 2
                 elif "Ferritin > 3000" in t: score += 5
                 else: score += 1
@@ -224,25 +332,27 @@ def get_differential(inputs):
             score += 1
             if "Missouri Residence" not in triggers: triggers.append("Missouri Residence")
 
-        # Immune Status Gates
-        # 1. Transplant
+        # Transplant Logic (Rubin's Timeline + Organ Type)
         is_tx = inputs['immune'] == "Transplant"
-        if d.get("req_tx") and not is_tx: score = 0
+        if d.get("req_tx_timeline"):
+            if not is_tx:
+                score = 0
+            elif d["req_tx_timeline"] != inputs.get("tx_time"):
+                # Allow overlap logic if needed, but for now hard filter
+                score = 0 
         
-        # 2. Chemo / Biologics (NEW)
-        req_immune = d.get("req_immune")
-        if req_immune:
-            if req_immune == "Chemo" and "Chemotherapy" not in inputs['immune']: score = 0
-            if req_immune == "Biologics" and "Biologics" not in inputs['immune']: score = 0
-
-        # 3. HIV CD4
+        # HIV Logic
         if d.get("req_cd4_ceiling"):
             if inputs['immune'] != "HIV Positive": score = 0
             elif inputs.get("cd4", 1000) > d["req_cd4_ceiling"]: score = 0
             elif score == 0: score = 1; triggers.append(f"CD4 < {d['req_cd4_ceiling']}")
 
+        # Med Requirement
         if d.get("req_med") and not (inputs["meds"] and score >= 1): score = 0
+        
+        # Age exclusions
         if d['dx'] == "Kikuchi-Fujimoto Disease" and inputs['age'] > 40: score = 0
+        if d['dx'] == "Temporal Arteritis (GCA)" and inputs['age'] < 50: score = 0
 
         if score > 0:
             active_dx.append({"dx": d["dx"], "type": d["type"], "triggers": triggers, "score": score})
@@ -255,7 +365,7 @@ def generate_note(inputs, active_dx, optimized_orders):
     txt = f"Date: {datetime.date.today()}\n"
     txt += f"{inputs['age']}yo {inputs['sex']} "
     if inputs['immune'] != "Immunocompetent": txt += f"({inputs['immune']}) "
-    if "Transplant" in inputs['immune']: txt += f"[{inputs['tx_type']}, {inputs['tx_time']}] "
+    if "Transplant" in inputs['immune']: txt += f"[{inputs['tx_type']}, {inputs['tx_time']} post-op] "
     
     txt += f"presenting with fever (Tmax {inputs['tmax']}, HR {inputs['hr']}) for {inputs['duration_fever_days']} days.\n"
     
@@ -276,10 +386,10 @@ def generate_note(inputs, active_dx, optimized_orders):
         names = [d['dx'] for d in crit]
         txt += f"**CRITICAL CONSIDERATIONS**: {', '.join(names)}.\n"
 
-    inf = [d for d in active_dx if 'Infectious' in d['type'] or 'Endemic' in d['type'] or 'Tropical' in d['type']]
+    inf = [d for d in active_dx if d['type'] in ['Infectious', 'Endemic Fungal', 'Tropical']]
     if inf:
         names = [d['dx'] for d in inf]
-        txt += f"Infectious differential prioritizes {', '.join(names)}.\n"
+        txt += f"Infectious/Tropical differential prioritizes {', '.join(names)}.\n"
 
     non_inf = [d for d in active_dx if d['type'] == 'Non-Infectious']
     if non_inf:
@@ -313,9 +423,7 @@ with st.sidebar:
     c1, c2 = st.columns(2)
     age = c1.number_input("Age", 18, 100, 35)
     sex = c2.selectbox("Sex", ["Female", "Male"])
-    
-    # IMMUNE EXPANSION
-    immune = st.selectbox("Immune", ["Immunocompetent", "HIV Positive", "Transplant", "Chemotherapy/Neutropenia", "Biologics (TNFa/Ritux)"])
+    immune = st.selectbox("Immune", ["Immunocompetent", "HIV Positive", "Transplant", "Chemotherapy", "Biologics"])
     
     cd4 = 1000
     tx_type, tx_time = None, None
@@ -332,10 +440,10 @@ with st.sidebar:
     st.header("Subjective History")
     on_abx = st.checkbox("On Antibiotics?")
     
-    with st.expander("Social / Risks", expanded=True):
+    with st.expander("Risks / Social", expanded=True):
         ivdu = st.checkbox("IV Drug Use")
         msm = st.checkbox("MSM")
-        high_risk_sex = st.checkbox("High Risk Sexual Activity")
+        high_risk_sex = st.checkbox("High Risk Sex")
         sex_work = st.checkbox("Transactional Sex")
         hc_worker = st.checkbox("Healthcare Worker")
         military = st.checkbox("Military Service")
@@ -346,26 +454,38 @@ with st.sidebar:
         cats = st.checkbox("Cats")
         livestock = st.checkbox("Farm Animals")
         raw_crab = st.checkbox("Raw Crustaceans")
-        tick = st.checkbox("Tick Bite")
+        raw_shell = st.checkbox("Raw Shellfish/Oysters")
+        pork = st.checkbox("Undercooked Pork")
+        tick_dog = st.checkbox("Tick: Dog/Wood")
+        tick_lone = st.checkbox("Tick: Lone Star")
+        birds = st.checkbox("Bird/Bat Droppings")
         farm = st.checkbox("Rural / Farm Living")
         well = st.checkbox("Well Water")
         
     with st.expander("Travel", expanded=False):
-        travel_se_asia = st.checkbox("SE Asia")
-        travel_sub_sahara = st.checkbox("Sub-Saharan Africa")
-        travel_s_amer = st.checkbox("South America")
-        travel_mid_east = st.checkbox("Middle East")
-        travel_med = st.checkbox("Mediterranean / Mexico")
+        travel_tropics = st.checkbox("Travel (Sub-Saharan Africa)")
+        travel_se_asia = st.checkbox("Travel (SE Asia)")
+        travel_s_amer = st.checkbox("Travel (South America)")
+        travel_mid_east = st.checkbox("Travel (Middle East)")
+        travel_med = st.checkbox("Travel (Med/Mexico)")
+        travel_sw = st.checkbox("Travel (Southwest US)")
 
     meds = st.multiselect("New Meds", ["Antibiotic", "Anticonvulsant", "Sulfa"])
     
-    st.header("Objective Findings")
-    with st.expander("Physical Exam", expanded=False):
+    st.header("Objective / ROS")
+    with st.expander("Physical / Symptoms", expanded=False):
         murmur = st.checkbox("New Murmur")
         cervical_lad = st.checkbox("Cervical Lymphadenopathy")
         splenomegaly = st.checkbox("Splenomegaly")
         rash = st.checkbox("Rash (Any)")
         chancre = st.checkbox("Chancre / Eschar")
+        oral_ulcers = st.checkbox("Oral Ulcers")
+        headache = st.checkbox("Severe Headache")
+        jaw = st.checkbox("Jaw Claudication")
+        joint = st.checkbox("Joint Pain")
+        vision = st.checkbox("Vision Changes")
+        abd_pain = st.checkbox("Abd Pain")
+        diarrhea = st.checkbox("Diarrhea")
         
     with st.expander("Labs", expanded=False):
         ferritin_crit = st.checkbox("Ferritin > 3000")
@@ -373,61 +493,80 @@ with st.sidebar:
         pancytopenia = st.checkbox("Pancytopenia")
         eosinophilia = st.checkbox("Eosinophilia")
         lfts = st.checkbox("Elevated LFTs")
+        hyponatremia = st.checkbox("Hyponatremia")
+        cirrhosis = st.checkbox("Cirrhosis/Liver Disease")
         diabetes = st.checkbox("Diabetes")
 
     st.header("Prior Workup")
-    prior_workup = st.multiselect("Negatives", ["Negative Blood Cx", "Negative HIV", "Negative O&P", "Negative ANA/RF", "Negative Quantiferon", "Negative Malaria Smear"])
+    prior_workup = st.multiselect("Negatives", ["Negative Blood Cx", "Negative HIV", "Negative O&P", "Negative ANA/RF", "Negative Quantiferon", "Negative Malaria"])
     
     run = st.button("Generate Note")
 
 # --- MAIN ---
-st.title("ID-CDSS | Director Suite v28")
+st.title("ID-CDSS | Director Gold Master (v30)")
 
 if run:
     all_positives = meds[:]
     # Social
     if ivdu: all_positives.append("IV Drug Use")
     if msm: all_positives.append("MSM")
-    if high_risk_sex: all_positives.append("High Risk Sexual Activity")
+    if high_risk_sex: all_positives.append("High Risk Sex")
     if sex_work: all_positives.append("Transactional Sex")
     if sick_contact: all_positives.append("Sick Contacts")
     if hc_worker: all_positives.append("Healthcare Worker")
     if military: all_positives.append("Military Service")
     if homeless: all_positives.append("Homelessness")
-    # Vectors
+    # Vectors/Diet
     if farm: all_positives.append("Rural Area")
     if well: all_positives.append("Well Water")
     if raw_crab: all_positives.append("Raw Crustaceans")
-    if tick: all_positives.append("Tick Bite")
+    if raw_shell: all_positives.append("Raw Shellfish/Oysters")
+    if pork: all_positives.append("Undercooked Pork/Game")
+    if tick_dog: all_positives.append("Tick: Dog/Wood")
+    if tick_lone: all_positives.append("Tick: Lone Star")
     if cats: all_positives.append("Cats")
     if livestock: all_positives.append("Farm Animals")
+    if birds: all_positives.append("Bird/Bat Droppings")
     # Travel
+    if travel_tropics: all_positives.append("Travel (Sub-Saharan Africa)")
     if travel_se_asia: all_positives.append("Travel (SE Asia)")
-    if travel_sub_sahara: all_positives.append("Travel (Sub-Saharan Africa)")
     if travel_s_amer: all_positives.append("Travel (South America)")
     if travel_mid_east: all_positives.append("Travel (Middle East)")
     if travel_med: all_positives.append("Travel (Med/Mexico)")
-    # Obj
+    if travel_sw: all_positives.append("Travel (Southwest US)")
+    # Obj/ROS
     if murmur: all_positives.append("New Murmur")
     if cervical_lad: all_positives.append("Cervical Lymphadenopathy")
     if splenomegaly: all_positives.append("Splenomegaly")
     if rash: all_positives.append("Rash")
     if chancre: all_positives.append("Chancre")
+    if oral_ulcers: all_positives.append("Oral Ulcers")
+    if headache: all_positives.append("Severe Headache")
+    if jaw: all_positives.append("Jaw Claudication")
+    if joint: all_positives.append("Joint Pain")
+    if vision: all_positives.append("Vision Changes")
+    if abd_pain: all_positives.append("Abd Pain")
+    if diarrhea: all_positives.append("Diarrhea")
+    # Labs
     if ferritin_crit: all_positives.append("Ferritin > 3000")
     if ferritin_high: all_positives.append("Ferritin > 1000")
     if pancytopenia: all_positives.append("Pancytopenia")
     if eosinophilia: all_positives.append("Eosinophilia")
     if lfts: all_positives.append("Elevated LFTs")
+    if hyponatremia: all_positives.append("Hyponatremia")
+    if cirrhosis: all_positives.append("Cirrhosis/Liver Disease")
     if diabetes: all_positives.append("Diabetes")
+    
     if sex == "Female": all_positives.append("Female Sex")
     if age < 40: all_positives.append("Age < 40")
+    if age > 50: all_positives.append("Age > 50")
 
     inputs = {
         "age": age, "sex": sex, "immune": immune, "cd4": cd4,
         "tx_type": tx_type, "tx_time": tx_time,
         "tmax": tmax, "hr": hr, "duration_fever_days": duration_fever_days,
         "all_positives": all_positives, 
-        "social": [x for x in all_positives if x in ["IV Drug Use", "MSM", "High Risk Sexual Activity"]],
+        "social": [x for x in all_positives if x in ["IV Drug Use", "MSM", "High Risk Sex"]],
         "meds": meds, "prior_workup": set(prior_workup)
     }
 
