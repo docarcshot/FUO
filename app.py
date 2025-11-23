@@ -413,62 +413,63 @@ with st.sidebar:
     # RHEUMATOLOGY GATE (restored)
     suspect_rheum = st.checkbox("Suspect rheumatologic etiology", value=False)
 
-    st.header("Symptoms (ROS)")
+st.header("Symptoms (ROS)")
 
-    with st.expander("Constitutional"):
-        night_sweats = st.checkbox("Night sweats")
-        weight_loss = st.checkbox("Weight loss")
-        fatigue = st.checkbox("Fatigue")
+with st.expander("Constitutional", expanded=True):
+    night_sweats = st.checkbox("Night sweats")
+    weight_loss = st.checkbox("Weight loss")
+    fatigue = st.checkbox("Fatigue")
 
-    with st.expander("Neurologic"):
-        headache = st.checkbox("Headache")
-        vision_changes = st.checkbox("Vision changes")
-        seizures = st.checkbox("Seizures")
+with st.expander("Neurologic", expanded=True):
+    headache = st.checkbox("Headache")
+    vision_changes = st.checkbox("Vision changes")
+    seizures = st.checkbox("Seizures")
 
-    with st.expander("Respiratory"):
-        chronic_cough = st.checkbox("Chronic cough")
-        hemoptysis = st.checkbox("Hemoptysis")
-        dyspnea = st.checkbox("Dyspnea")
+with st.expander("Respiratory", expanded=True):
+    chronic_cough = st.checkbox("Chronic cough")
+    hemoptysis = st.checkbox("Hemoptysis")
+    dyspnea = st.checkbox("Dyspnea")
 
-    with st.expander("GI / Hepatic"):
-        abdominal_pain = st.checkbox("Abdominal pain")
-        diarrhea = st.checkbox("Diarrhea")
-        ruq_pain = st.checkbox("RUQ pain / hepatodynia")
+with st.expander("GI / Hepatic", expanded=True):
+    abdominal_pain = st.checkbox("Abdominal pain")
+    diarrhea = st.checkbox("Diarrhea")
+    ruq_pain = st.checkbox("RUQ pain / hepatodynia")
 
-    with st.expander("MSK"):
-        arthralgia = st.checkbox("Joint pain")
-        back_pain = st.checkbox("Back pain")
-        myalgia = st.checkbox("Myalgias")
+with st.expander("MSK", expanded=True):
+    arthralgia = st.checkbox("Joint pain")
+    back_pain = st.checkbox("Back pain")
+    myalgia = st.checkbox("Myalgias")
 
-    with st.expander("Skin findings"):
-        rash = st.checkbox("Rash")
-        palmar_rash = st.checkbox("Palms/soles rash")
-        nodules = st.checkbox("Skin nodules/lesions")
+with st.expander("Skin findings", expanded=True):
+    rash = st.checkbox("Rash")
+    palmar_rash = st.checkbox("Palms/soles rash")
+    nodules = st.checkbox("Skin nodules/lesions")
 
-    with st.expander("Lymph / Heme"):
-        lymphadenopathy = st.checkbox("Lymphadenopathy")
-        splenomegaly = st.checkbox("Splenomegaly")
-        pancytopenia = st.checkbox("Pancytopenia")
+with st.expander("Lymph / Heme", expanded=True):
+    lymphadenopathy = st.checkbox("Lymphadenopathy")
+    splenomegaly = st.checkbox("Splenomegaly")
+    pancytopenia = st.checkbox("Pancytopenia")
 
-    st.header("Exposures and Risks")
+st.header("Exposures and Risks")
 
-    with st.expander("Animals and environment"):
-        cats = st.checkbox("Cat exposure")
-        livestock = st.checkbox("Livestock / farm animals")
-        bird_bat = st.checkbox("Bird / bat or cave exposure")
-        unpasteurized_dairy = st.checkbox("Unpasteurized dairy")
-        rural = st.checkbox("Rural or farm living")
-        body_lice = st.checkbox("Body lice")
+with st.expander("Animals and environment", expanded=True):
+    cats = st.checkbox("Cat exposure")
+    livestock = st.checkbox("Livestock / farm animals")
+    bird_bat = st.checkbox("Bird / bat or cave exposure")
+    unpasteurized_dairy = st.checkbox("Unpasteurized dairy")
+    rural = st.checkbox("Rural or farm living")
+    body_lice = st.checkbox("Body lice")
 
-    with st.expander("Social / TB risk"):
-        ivdu = st.checkbox("IV drug use")
-        homeless = st.checkbox("Homelessness or incarceration")
-        tb_contact = st.checkbox("TB exposure")
-        high_tb_travel = st.checkbox("High TB burden country travel")
+with st.expander("Social / TB risk", expanded=True):
+    ivdu = st.checkbox("IV drug use")
+    homeless = st.checkbox("Homelessness or incarceration")
+    tb_contact = st.checkbox("TB exposure")
+    high_tb_travel = st.checkbox("High TB burden country travel")
 
-    with st.expander("Geography"):
-        missouri = st.checkbox("Missouri / Ohio River Valley")
-        sw_us = st.checkbox("US Southwest travel")
+with st.expander("Geography", expanded=True):
+    missouri = st.checkbox("Missouri / Ohio River Valley")
+    sw_us = st.checkbox("US Southwest travel")
+
 
     st.header("Prior Workup (Negative)")
     prior_neg = st.multiselect(
