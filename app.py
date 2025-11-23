@@ -415,7 +415,7 @@ with st.sidebar:
 suspect_rheum = st.checkbox("Suspect rheumatologic etiology", value=False)
 
     # Symptoms and exposures with expanders
-    st.header("Symptoms (ROS)")
+st.header("Symptoms (ROS)")
 
     with st.expander("Constitutional"):
         night_sweats = st.checkbox("Night sweats")
