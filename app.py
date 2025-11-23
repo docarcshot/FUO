@@ -160,3 +160,238 @@ def get_plan(inputs):
         "Imaging": set(),
         "Transplant Specific": set(),
         "Other": set()
+    }
+    
+    # Universal Additions
+    if "IV Drug Use" in inputs['social']:
+        grouped_orders["Immediate/Baseline"].update(["HIV 1/2 Ag/Ab", "Syphilis IgG", "HCV Ab"])
+        
+    for d in DATABASE:
+        score = 0
+        triggers = []
+        
+        # Trigger Matching
+        for t in d["triggers"]:
+            if any(pos_t in t for pos_t in inputs["all_positives"]) or t in inputs["all_positives"]:
+                score += 1
+                triggers.append(t)
+
+        # --- TRANSPLANT LOGIC (RUBIN'S TIMELINE) ---
+        is_transplant = inputs['immune'] == "Transplant"
+        
+        # 1. Filter by Transplant Type
+        if "req_tx" in d:
+            if not is_transplant:
+                score = 0 # Kill transplant diagnoses for non-transplant
+            elif d["req_tx"] != "ANY" and d["req_tx"] not in inputs.get("tx_type", ""):
+                score = 0 # Kill Lung specific if Kidney, etc.
+                
+        # 2. Filter by Timing (The 1-6 Month Window)
+        if is_transplant and d['dx'] in ["CMV Syndrome / Tissue Invasive Disease", "Invasive Aspergillosis"]:
+            if inputs["tx_time"] == "1-6 Months":
+                score += 2 # Boost Score
+                triggers.append("Rubin's Timeline (1-6mo)")
+            elif inputs["tx_time"] == "<1 Month" and d['dx'] == "Invasive Aspergillosis":
+                score = 0 # Rare early unless pre-colonized
+                
+        # 3. Chagas Reactivation Logic
+        if d['dx'] == "Chagas Disease (Reactivation)":
+            if is_transplant and "Travel (South America)" in inputs['all_positives']:
+                score += 2
+                triggers.append("Immunosuppression Reactivation Risk")
+
+        # --- GENERAL OVERRIDES ---
+        if d.get("req_med") and not (inputs["meds"] and score >= 1): score = 0
+        if d['dx'] == "Temporal Arteritis (GCA)" and inputs['age'] < 50: score = 0
+        if d['dx'] in ["Malaria", "Rocky Mountain Spotted Fever (RMSF)"] and score > 0:
+            triggers.append("CRITICAL VECTOR HISTORY")
+
+        if score > 0:
+            active_dx.append({"dx": d["dx"], "triggers": triggers})
+            for test, tier in d['orders']:
+                if is_transplant and tier > 0: grouped_orders["Transplant Specific"].add(test)
+                elif tier == 0: grouped_orders["Immediate/Baseline"].add(test)
+                elif "CT" in test or "TTE" in test or "TEE" in test: grouped_orders["Imaging"].add(test)
+                elif "Serology" in test or "PCR" in test or "Smear" in test: grouped_orders["Vector/Travel"].add(test)
+                else: grouped_orders["Other"].add(test)
+
+    # Stewardship
+    items_to_remove = set()
+    for result in inputs["prior_workup"]:
+        if result in PRIOR_MAP: items_to_remove.add(PRIOR_MAP[result])
+            
+    for cat in grouped_orders:
+        grouped_orders[cat] -= items_to_remove
+
+    return active_dx, grouped_orders
+
+def generate_note(inputs, active_dx, grouped_orders):
+    txt = f"{inputs['age']}yo {inputs['sex']} "
+    
+    if inputs['immune'] == "Transplant":
+        txt += f"status post {inputs['tx_type']} transplant ({inputs['tx_time']} ago), "
+    elif inputs['immune'] == "HIV Positive":
+        txt += f"with HIV (CD4 {inputs['cd4']}), "
+        
+    txt += f"presenting with fever for {inputs['duration_fever_days']} days. "
+    
+    exposures = [x for x in inputs['all_positives'] if x]
+    if exposures: txt += f"Relevant exposures: {', '.join(exposures)}. "
+    else: txt += "No distinct localization vectors identified. "
+        
+    if active_dx:
+        likely = [d['dx'] for d in active_dx[:3]]
+        less_likely = [d['dx'] for d in active_dx[3:]]
+        txt += f"\nDifferential prioritizes {', '.join(likely)}"
+        if less_likely: txt += f", consider {', '.join(less_likely)}."
+    else:
+        txt += "\nDifferential is broad (True FUO)."
+        
+    if inputs['prior_workup']:
+        clean_priors = [p.replace("Negative ", "").replace("Normal ", "") for p in inputs['prior_workup']]
+        txt += f"\nPrevious workup negative: {', '.join(clean_priors)}."
+    
+    txt += "\n\nPlan:"
+    
+    # Order by clinical priority
+    base = sorted(list(grouped_orders['Immediate/Baseline']))
+    if base: txt += f"\n- Immediate/Basic: {', '.join(base)}"
+    
+    tx_spec = sorted(list(grouped_orders['Transplant Specific']))
+    if tx_spec: txt += f"\n- Transplant Protocol: {', '.join(tx_spec)}"
+        
+    vec = sorted(list(grouped_orders['Vector/Travel']))
+    if vec: txt += f"\n- Vector/Travel specific: {', '.join(vec)}"
+        
+    img = sorted(list(grouped_orders['Imaging']))
+    if img: txt += f"\n- Structural: {', '.join(img)}"
+        
+    oth = sorted(list(grouped_orders['Other']))
+    if oth: txt += f"\n- Extended: {', '.join(oth)}"
+
+    return txt
+
+# --- UI SIDEBAR ---
+with st.sidebar:
+    st.title("Patient Data")
+    if st.button("Clear All"):
+        st.session_state.clear()
+        st.rerun()
+
+    c1, c2 = st.columns(2)
+    age = c1.number_input("Age", 18, 100, 45)
+    sex = c2.selectbox("Sex", ["Male", "Female"])
+    immune = st.selectbox("Immune", ["Immunocompetent", "HIV Positive", "Transplant"])
+    
+    # --- DYNAMIC IMMUNE INPUTS ---
+    tx_type = None
+    tx_time = None
+    cd4 = None
+    
+    if immune == "HIV Positive": 
+        cd4 = st.slider("CD4 Count", 0, 1200, 450)
+    elif immune == "Transplant":
+        st.markdown("---")
+        st.markdown("**Transplant Specifics**")
+        tx_type = st.selectbox("Organ Type", ["Kidney", "Liver", "Lung", "Heart", "BMT/HSCT"])
+        tx_time = st.selectbox("Time from Tx", ["<1 Month", "1-6 Months", ">6 Months"])
+        st.markdown("---")
+
+    st.header("History")
+    on_abx = st.checkbox("On Antibiotics?")
+    meds = st.multiselect("New Meds", ["Beta-Lactam", "Anticonvulsant", "Sulfa", "Allopurinol"])
+    days_since_new_med = st.number_input("Days since started", 0, 365, 0) if meds else 0
+    duration_fever_days = st.number_input("Fever Days", 0, 365, 10)
+
+    st.header("Exposures (Granular)")
+    with st.expander("Dietary", expanded=True):
+        raw_shell = st.checkbox("Raw Shellfish")
+        raw_crab = st.checkbox("Raw Crustacean (Crayfish/Crab)")
+        pork_game = st.checkbox("Undercooked Pork/Game")
+        unpast_dairy = st.checkbox("Unpasteurized Dairy")
+
+    with st.expander("Arthropod Vectors", expanded=True):
+        tick_dog = st.checkbox("Tick: Dog/Wood (RMSF)")
+        tick_lonestar = st.checkbox("Tick: Lone Star")
+        fleas_lice = st.checkbox("Fleas / Body Lice")
+        mosquito = st.checkbox("Mosquito (Tropics)")
+
+    with st.expander("International Travel", expanded=True):
+        travel_se_asia = st.checkbox("SE Asia")
+        travel_sub_sahara = st.checkbox("Sub-Saharan Africa")
+        travel_s_amer = st.checkbox("South America")
+        travel_med = st.checkbox("Mediterranean / Mexico")
+
+    with st.expander("Animals / Social", expanded=False):
+        cats = st.checkbox("Cats")
+        livestock = st.checkbox("Farm Animals")
+        birds = st.checkbox("Birds/Bats")
+        ivdu = st.checkbox("IV Drug Use")
+
+    st.header("Symptoms (ROS)")
+    with st.expander("Open Review of Systems", expanded=False):
+        s_gen = st.multiselect("Gen", ["Night Sweats", "Weight Loss", "New Headache"])
+        s_msk = st.multiselect("MSK/Derm", ["Rash (Palms/Soles)", "Rash (Diffuse)", "Joint Pain", "Myalgia"]) 
+        s_lab = st.multiselect("Labs", ["Eosinophilia", "Thrombocytopenia", "Leukopenia", "Elevated LFTs", "Hyponatremia"])
+        s_oth = st.multiselect("Other", ["Jaw Claudication", "Vision Changes", "New Murmur", "Hemoptysis", "Hepatodynia", "Diarrhea", "Arrhythmia", "Heart Failure"])
+
+    st.header("Prior Workup")
+    prior_workup = st.multiselect("Select Negatives", ["Negative Blood Cx x3", "Negative Malaria Smear", "Normal CT Chest/Abd/Pelvis", "Normal TTE"])
+
+    run = st.button("Generate Note")
+
+# --- MAIN ---
+st.title("ID-CDSS | Transplant Logic")
+
+if run:
+    # Aggregate Inputs
+    all_positives = meds + s_gen + s_msk + s_lab + s_oth
+    if raw_shell: all_positives.append("Raw Shellfish/Oysters")
+    if raw_crab: all_positives.append("Raw Crustaceans (Crab/Crayfish)")
+    if pork_game: all_positives.append("Undercooked Pork/Game")
+    if unpast_dairy: all_positives.append("Unpasteurized Dairy")
+    if tick_dog: all_positives.append("Tick Bite (Dog/Wood)")
+    if tick_lonestar: all_positives.append("Tick Bite (Lone Star/Ixodes)")
+    if fleas_lice: all_positives.append("Flea/Lice Exposure")
+    if travel_se_asia: all_positives.append("Travel (SE Asia)")
+    if travel_sub_sahara: all_positives.append("Travel (Sub-Saharan Africa)")
+    if travel_s_amer: all_positives.append("Travel (South America)")
+    if travel_med: all_positives.append("Travel (Med/Mexico)")
+    if cats: all_positives.append("Cats")
+    if livestock: all_positives.append("Farm Animals")
+    if birds: all_positives.append("Bird/Bat Droppings")
+    if ivdu: all_positives.append("IV Drug Use")
+
+    inputs = {
+        "age": age, "sex": sex, "immune": immune, 
+        "tx_type": tx_type, "tx_time": tx_time, "cd4": cd4,
+        "on_abx": on_abx, "meds": meds, "days_since_new_med": days_since_new_med,
+        "duration_fever_days": duration_fever_days,
+        "all_positives": all_positives, "social": [x for x in all_positives if x in ["IV Drug Use", "Prosthetic Valve"]],
+        "prior_workup": set(prior_workup),
+    }
+
+    active_dx, grouped_orders = get_plan(inputs)
+
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        if on_abx: st.error("⚠️ STEWARDSHIP: Patient on Abx. Hold recommended.")
+        st.subheader("Differential")
+        if active_dx:
+            for d in active_dx:
+                # Visual flagging for Transplant
+                extra_style = ""
+                if "Rubin" in str(d['triggers']) or "Reactivation" in d['dx']:
+                    extra_style = "transplant"
+                elif "CRITICAL" in str(d['triggers']):
+                    extra_style = "tier3"
+                
+                if extra_style: st.markdown(f"<div class='{extra_style}'>", unsafe_allow_html=True)
+                st.markdown(f"**{d['dx']}**")
+                st.caption(f"Trigger: {', '.join(d['triggers'])}")
+                if extra_style: st.markdown("</div>", unsafe_allow_html=True)
+        else: st.info("No specific pattern matches.")
+
+    with c2:
+        st.subheader("Note Generation")
+        st.text_area("Consult Note", generate_note(inputs, active_dx, grouped_orders), height=500)
