@@ -1,308 +1,415 @@
 import streamlit as st
 import datetime
 
-# ---------------------------------------------------------------------
-# CONFIGURATION
-# ---------------------------------------------------------------------
-st.set_page_config(page_title="ID-CDSS | FUO Engine v1", layout="wide")
+st.set_page_config(page_title="ID-CDSS | FUO Master v40", layout="wide")
 
-# ---------------------------------------------------------------------
+########################################
 # STYLE
-# ---------------------------------------------------------------------
+########################################
+
 st.markdown("""
 <style>
-.tier0 { border-left: 6px solid #000; padding: 10px; background-color: #f0f0f0; }
-.crit { border-left: 6px solid #dc3545; padding: 10px; background-color: #ffe6e6; }
-.inf  { border-left: 6px solid #28a745; padding: 10px; background-color: #e6fffa; }
-.endemic { border-left: 6px solid #fd7e14; padding: 10px; background-color: #fff3cd; }
-.noninf { border-left: 6px solid #17a2b8; padding: 10px; background-color: #e0f7fa; }
+.tier0 { border-left: 6px solid #000; padding: 10px; background-color:#f0f0f0; }
+.tier1 { border-left: 6px solid #28a745; padding: 10px; background-color:#e6fffa; }
+.tier2 { border-left: 6px solid #ffc107; padding: 10px; background-color:#fffbe6; }
+.tier3 { border-left: 6px solid #dc3545; padding: 10px; background-color:#ffe6e6; font-weight:bold; }
+.critical { border-left: 6px solid #dc3545; padding: 10px; background-color:#ffe6e6; }
+.endemic { border-left: 6px solid #fd7e14; padding: 10px; background-color:#fff3cd; }
+.noninf { border-left: 6px solid #17a2b8; padding: 10px; background-color:#e0f7fa; }
+.infectious { border-left: 6px solid #198754; padding: 10px; background-color:#e9fff8; }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------
-# HELPER
-# ---------------------------------------------------------------------
+
+
+########################################
+# HELPER: Faget's sign
+########################################
+
 def faget(t, hr):
-    return t >= 102.2 and hr < 100
+    return t >= 102 and hr < 100
 
 
-# ---------------------------------------------------------------------
-# CORE FUO DATABASE (CLEAN)
-# ---------------------------------------------------------------------
-FUO_DB = [
-    # --- CRITICAL FIRST ---
+
+########################################
+# FUO DATABASE — curated to be realistic
+########################################
+
+DATABASE = [
+
+    # CRITICAL
     {
         "dx": "HLH",
-        "type": "CRITICAL",
+        "type": "Critical",
         "triggers": ["Ferritin >3000", "Pancytopenia", "Splenomegaly", "Hypertriglyceridemia"],
-        "orders": ["Soluble CD25", "Fibrinogen", "Bone Marrow Biopsy"]
+        "orders": [("Soluble CD25",1), ("Fibrinogen",1), ("Bone Marrow Biopsy",3)]
     },
     {
-        "dx": "Malaria",
-        "type": "CRITICAL",
-        "triggers": ["Travel Africa", "Travel SE Asia", "Travel S America"],
-        "orders": ["Malaria Smear x3", "Rapid Antigen"]
-    },
-    {
-        "dx": "Miliary TB",
-        "type": "CRITICAL",
-        "triggers": ["TB Exposure", "Homelessness", "Immunocompromised"],
-        "orders": ["Quantiferon TB", "AFB x3"]
+        "dx": "Miliary Tuberculosis",
+        "type": "Critical",
+        "triggers": ["Night Sweats","Weight Loss","TB Exposure","Homelessness"],
+        "orders": [("Quantiferon-TB Gold",1), ("Sputum AFB x3",1)]
     },
 
-    # --- INFECTIOUS HIGH-YIELD ---
+    # INFECTIOUS
     {
         "dx": "Infectious Endocarditis",
-        "type": "INF",
-        "triggers": ["New Murmur", "IV Drug Use", "Prosthetic Valve"],
-        "orders": ["Blood Cx x3", "TTE", "TEE"]
+        "type": "Infectious",
+        "triggers": ["New Murmur","IVDU","Prosthetic Valve"],
+        "orders": [("Blood Cx x3",0), ("TTE",2), ("TEE",3)]
     },
     {
-        "dx": "Histoplasmosis (Disseminated)",
-        "type": "ENDEMIC",
-        "triggers": ["MO Residence", "Bird/Bat Droppings", "Pancytopenia", "Oral Ulcers"],
-        "orders": ["Urine/Serum Histo Ag", "Ferritin"]
+        "dx": "Disseminated Histoplasmosis",
+        "type": "Endemic Fungal",
+        "triggers": ["Missouri Residence","Bird/Bat Droppings","Pancytopenia"],
+        "orders": [("Urine/Serum Histo Ag",1)]
     },
     {
         "dx": "Q Fever",
-        "type": "INF",
-        "triggers": ["Farm Animals", "Parturient Animals"],
-        "orders": ["Coxiella Serology", "TTE"]
+        "type": "Infectious",
+        "triggers": ["Farm Animals","Well Water","Parturient Animals"],
+        "orders": [("Coxiella Serology",1)]
     },
     {
         "dx": "Brucellosis",
-        "type": "INF",
-        "triggers": ["Unpasteurized Dairy", "Livestock", "Back Pain"],
-        "orders": ["Brucella Serology", "Blood Cx (21d)"]
+        "type": "Infectious",
+        "triggers": ["Unpasteurized Dairy","Livestock","Back Pain","Relative Bradycardia"],
+        "orders": [("Brucella Serology",1)]
+    },
+    {
+        "dx": "Bartonella (Cat / Homelessness)",
+        "type": "Infectious",
+        "triggers": ["Cats","Homelessness","Body Lice"],
+        "orders": [("Bartonella Serology",1)]
+    },
+    {
+        "dx": "Strongyloidiasis",
+        "type": "Infectious",
+        "triggers": ["Eosinophilia","Travel (Tropics)"],
+        "orders": [("Strongyloides IgG",1)]
     },
 
-    # --- HIV OIs (only relevant if HIV+) ---
+    # HIV ONLY (nailed down)
     {
         "dx": "PCP",
-        "type": "INF",
-        "requires_hiv": True,
-        "cd4_ceiling": 200,
-        "triggers": ["Dyspnea", "Dry Cough", "Hypoxia"],
-        "orders": ["Beta-D-Glucan", "LDH", "CT Chest HR"]
+        "type": "Infectious",
+        "triggers": ["Dry Cough","Dyspnea","Hypoxia"],
+        "req_cd4": 200,
+        "orders": [("Beta-D-Glucan",1)]
     },
     {
-        "dx": "MAC (Disseminated)",
-        "type": "INF",
-        "requires_hiv": True,
-        "cd4_ceiling": 50,
-        "triggers": ["Night Sweats", "Weight Loss", "Anemia"],
-        "orders": ["AFB Blood Cx", "CT Abd/Pelvis"]
+        "dx": "Toxoplasmosis",
+        "type": "Infectious",
+        "triggers": ["Headache","Vision Changes","Neuro Deficit"],
+        "req_cd4": 100,
+        "orders": [("Toxo IgG",1), ("MRI Brain",2)]
     },
 
-    # --- NON-INFECTIOUS ---
+    # NON-INFECTIOUS
     {
-        "dx": "GCA",
-        "type": "NONINF",
-        "triggers": ["Age >50", "Jaw Claudication", "Vision Changes"],
-        "orders": ["ESR & CRP", "Temporal Artery US", "Temporal Artery Bx"]
+        "dx": "Giant Cell Arteritis (GCA)",
+        "type": "Non-Infectious",
+        "triggers": ["Headache","Jaw Claudication","Vision Changes","Age >50"],
+        "orders": [("ESR & CRP",1), ("Temporal Artery US",2)]
+    },
+    {
+        "dx": "Autoimmune Hepatitis",
+        "type": "Non-Infectious",
+        "triggers": ["Elevated LFTs","Female Sex"],
+        "orders": [("Liver Autoimmune Panel",1)]
+    },
+    {
+        "dx": "Systemic Lupus",
+        "type": "Non-Infectious",
+        "triggers": ["Malar Rash","Joint Pain","Proteinuria","Cytopenias"],
+        "orders": [("ANA",1), ("dsDNA",1), ("C3/C4",1)]
     },
     {
         "dx": "Malignancy (Lymphoma/RCC)",
-        "type": "NONINF",
-        "triggers": ["Night Sweats", "Weight Loss", "Hematuria"],
-        "orders": ["LDH", "CT CAP", "Naproxen Test"]
+        "type": "Non-Infectious",
+        "triggers": ["Night Sweats","Weight Loss","Hematuria","Splenomegaly"],
+        "orders": [("CT Chest/Abd/Pelvis",2), ("LDH",1)]
     },
-    {
-        "dx": "DRESS",
-        "type": "NONINF",
-        "requires_med": True,
-        "triggers": ["Rash", "Eosinophilia"],
-        "orders": ["CBC (Eos)", "LFTs", "HHV-6 PCR"]
-    }
 ]
 
-# ---------------------------------------------------------------------
-# LOGIC ENGINE (CLEAN)
-# ---------------------------------------------------------------------
-def run_engine(inputs):
+
+
+########################################
+# LOGIC ENGINE
+########################################
+
+def get_diff(inputs):
     dx_list = []
-    orders = set()
+    order_bucket = {0:[],1:[],2:[],3:[]}
 
-    for d in FUO_DB:
+    # relative bradycardia detection
+    if faget(inputs["tmax"], inputs["hr"]):
+        inputs["positives"].append("Relative Bradycardia")
+
+    for d in DATABASE:
         score = 0
-        # HIV gating
-        if d.get("requires_hiv"):
-            if not inputs["hiv"]:
-                continue
-            if inputs["cd4"] > d["cd4_ceiling"]:
-                continue
+        triggers_hit = []
 
-        # Drug gating for DRESS
-        if d.get("requires_med") and not inputs["on_med"]:
-            continue
-
-        # Trigger match
-        matched = []
+        # trigger matching
         for t in d["triggers"]:
             if t in inputs["positives"]:
                 score += 1
-                matched.append(t)
+                triggers_hit.append(t)
 
-        # special: endemic MO
-        if d["dx"].startswith("Histo") and inputs["missouri"]:
-            score += 1
-            matched.append("MO Residence")
+        # HIV restrictions
+        if "req_cd4" in d and inputs["immune"] == "HIV Positive":
+            if inputs["cd4"] < d["req_cd4"]:
+                score += 1
+                triggers_hit.append(f"CD4 < {d['req_cd4']}")
+            else:
+                score = 0
+
+        # age restrictions
+        if d["dx"] == "GCA" and inputs["age"] < 50:
+            score = 0
 
         if score > 0:
-            dx_list.append({
-                "dx": d["dx"],
-                "type": d["type"],
-                "score": score,
-                "triggers": matched,
-                "orders": d["orders"]
-            })
-            for o in d["orders"]:
-                orders.add(o)
+            dx_list.append({"dx": d["dx"],"type": d["type"],"triggers": triggers_hit,"score":score})
+            for o,tier in d["orders"]:
+                order_bucket[tier].append(o)
 
-    # universal baseline
-    baseline = ["CBC", "CMP", "ESR", "CRP", "UA", "HIV 4th Gen", "Syphilis IgG"]
-    for b in baseline:
-        orders.add(b)
-
-    # remove priors
-    orders = {o for o in orders if o not in inputs["prior_details"]}
-
-    dx_sorted = sorted(dx_list, key=lambda x: x["score"], reverse=True)
-    return dx_sorted, orders
+    dx_list = sorted(dx_list, key=lambda x: x["score"], reverse=True)
+    return dx_list, order_bucket
 
 
-# ---------------------------------------------------------------------
+
+def optimize_orders(order_bucket, inputs):
+
+    final = {"Actions":set(),"Immediate":set(),"Targeted":set(),"Imaging":set(),"Escalation":set()}
+
+    for tier,items in order_bucket.items():
+        for it in items:
+
+            if tier == 0:
+                final["Actions"].add(it)
+            elif tier == 1:
+                final["Immediate"].add(it)
+            elif tier == 2:
+                final["Imaging"].add(it)
+            elif tier == 3:
+                final["Escalation"].add(it)
+
+    # Universal baseline
+    final["Immediate"].update(["CBC","CMP","ESR","CRP","UA","HIV 1/2 Ag/Ab","Syphilis IgG"])
+
+    # Remove priors
+    for cat in final:
+        final[cat] = {o for o in final[cat] if not any(p in o for p in inputs["prior"])}
+
+    return final
+
+
+
+def note(inputs, dx_list, orders):
+
+    txt = f"Date: {datetime.date.today()}\n"
+    txt += f"{inputs['age']}yo {inputs['sex']} ({inputs['immune']}) "
+    txt += f"with fever for {inputs['dur']} days, Tmax {inputs['tmax']} with HR {inputs['hr']}.\n"
+
+    if faget(inputs['tmax'], inputs['hr']):
+        txt += "Vitals notable for Relative Bradycardia (Faget's Sign).\n"
+
+    txt += "\nAssessment & Differential:\n"
+    if not dx_list:
+        txt += "No syndromic matches. FUO category.\n"
+    else:
+        for d in dx_list:
+            txt += f"- {d['dx']} ({d['type']}) — triggers: {', '.join(d['triggers'])}\n"
+
+    txt += "\nPlan:\n"
+    if orders["Actions"]:
+        txt += "Actions:\n"
+        for a in sorted(orders["Actions"]):
+            txt += f"- [ ] {a}\n"
+
+    if orders["Immediate"]:
+        txt += "Immediate labs:\n"
+        txt += "- " + ", ".join(sorted(orders["Immediate"])) + "\n"
+
+    if orders["Targeted"]:
+        txt += "Targeted Tests:\n"
+        txt += "- " + ", ".join(sorted(orders["Targeted"])) + "\n"
+
+    if orders["Imaging"]:
+        txt += "Imaging:\n"
+        txt += "- " + ", ".join(sorted(orders["Imaging"])) + "\n"
+
+    if orders["Escalation"]:
+        txt += "Escalation (High-Yield/Phase 2):\n"
+        txt += "- " + ", ".join(sorted(orders["Escalation"])) + "\n"
+
+    return txt
+
+
+
+########################################
 # UI
-# ---------------------------------------------------------------------
-st.title("ID-CDSS | FUO Engine")
+########################################
 
 with st.sidebar:
-    st.header("Patient Info")
-    age = st.number_input("Age", 18, 100, 55)
-    sex = st.selectbox("Sex", ["Male", "Female"])
-    duration = st.number_input("Days of Fever", 1, 365, 21)
-    tmax = st.number_input("Maximum Temp (°F)", 98.0, 107.0, 102.5)
-    hr = st.number_input("HR at Tmax", 40, 160, 90)
+    st.title("Patient Data")
 
-    st.header("Immune Status")
-    immune = st.selectbox("Immune State",
-                          ["Normal", "HIV+", "Transplant"])
-    hiv = (immune == "HIV+")
+    age = st.number_input("Age",18,100,50)
+    sex = st.selectbox("Sex",["Male","Female"])
+
+    immune = st.selectbox("Immune Status",
+                           ["Immunocompetent","HIV Positive","Transplant","Biologics","Chemotherapy"])
+
     cd4 = 1000
-    if hiv:
-        cd4 = st.slider("CD4 Count", 0, 1200, 350)
-
-    transplant = (immune == "Transplant")
     tx_type = None
-    tx_time = None
-    if transplant:
-        tx_type = st.selectbox("Organ", ["Kidney", "Liver", "Lung", "BMT"])
-        tx_time = st.selectbox("Timeline", ["<1 mo", "1–6 mo", ">6 mo"])
+    if immune == "HIV Positive":
+        cd4 = st.slider("CD4 Count",0,1200,450)
+    if immune == "Transplant":
+        tx_type = st.selectbox("Transplant Type",["Kidney","Liver","Lung","BMT"])
+        tx_time = st.selectbox("Time Since Tx",["<1 Month","1-6 Months",">6 Months"])
+
+    tmax = st.number_input("Tmax (°F)",98.0,107.0,102.2,step=.1)
+    hr = st.number_input("HR at Tmax",40,160,95)
+    dur = st.number_input("Duration of fever (days)",0,365,21)
 
     st.header("Medications")
-    on_abx = st.checkbox("On Antibiotics?")
-    on_med = st.checkbox("New High-Risk Drug? (Sulfa, Anticonvulsant, BL)")
+    meds = st.multiselect("Recent / New Medications",["Antibiotic","Anticonvulsant","Sulfa"])
 
-    st.header("Exposures & Travel")
-    missouri = st.checkbox("Missouri Residence")
-    farm = st.checkbox("Farm Animals")
-    bats = st.checkbox("Bird/Bat Droppings")
-    dairy = st.checkbox("Unpasteurized Dairy")
-    africa = st.checkbox("Travel Africa")
-    se_asia = st.checkbox("Travel SE Asia")
-    s_amer = st.checkbox("Travel S America")
-    tb = st.checkbox("TB Exposure")
-    ivdu = st.checkbox("IV Drug Use")
-    prosthetic = st.checkbox("Prosthetic Valve")
+    st.header("ROS – System Based")
 
-    st.header("Review of Systems")
-    sweats = st.checkbox("Night Sweats")
-    wl = st.checkbox("Weight Loss")
-    backpain = st.checkbox("Back Pain")
-    cough = st.checkbox("Dry Cough")
-    dyspnea = st.checkbox("Dyspnea")
+    st.subheader("Constitutional")
+    night_sweats = st.checkbox("Night Sweats")
+    weight_loss = st.checkbox("Weight Loss")
+    fatigue = st.checkbox("Fatigue")
+
+    st.subheader("Neuro")
+    ha = st.checkbox("Headache")
+    seizure = st.checkbox("Seizure")
+    neuro_def = st.checkbox("Focal Neuro Deficit")
+
+    st.subheader("HEENT")
     vision = st.checkbox("Vision Changes")
     jaw = st.checkbox("Jaw Claudication")
-    murmur = st.checkbox("New Murmur")
-    eos = st.checkbox("Eosinophilia")
+
+    st.subheader("Respiratory")
+    cough = st.checkbox("Dry Cough")
+    dyspnea = st.checkbox("Dyspnea")
+
+    st.subheader("GI")
+    abd = st.checkbox("Abdominal Pain")
+    diarrhea = st.checkbox("Diarrhea")
+    hepatodynia = st.checkbox("Hepatodynia")
+
+    st.subheader("Skin")
     rash = st.checkbox("Rash")
-    pancytopenia = st.checkbox("Pancytopenia")
+    palmsoles = st.checkbox("Palms/Soles Rash")
+
+    st.subheader("MSK")
+    joint = st.checkbox("Joint Pain")
+
+    st.header("Exposures")
+    cats = st.checkbox("Cats")
+    livestock = st.checkbox("Livestock")
+    bats = st.checkbox("Bird/Bat Droppings")
+    dairy = st.checkbox("Unpasteurized Dairy")
+    well = st.checkbox("Well Water")
+    ivdu = st.checkbox("IV Drug Use")
+    homeless = st.checkbox("Homelessness")
+    tbexp = st.checkbox("TB Exposure")
+
+    st.header("Travel")
+    tropics = st.checkbox("Travel (Tropics)")
+    mexico = st.checkbox("Travel (Mexico/Mediterranean)")
+    swus = st.checkbox("Travel (Southwest US)")
+    africa = st.checkbox("Travel (Sub-Saharan Africa)")
+
+    st.header("Labs")
+    pancyt = st.checkbox("Pancytopenia")
     ferritin3k = st.checkbox("Ferritin >3000")
-    trig = st.checkbox("Hypertriglyceridemia")
+    hypertrig = st.checkbox("Hypertriglyceridemia")
+    lfts = st.checkbox("Elevated LFTs")
+    eos = st.checkbox("Eosinophilia")
+    splen = st.checkbox("Splenomegaly")
+    hematuria = st.checkbox("Hematuria")
 
     st.header("Prior Workup")
-    prior = st.multiselect(
-        "Negative:",
-        ["Blood Cx", "HIV", "CT CAP", "Quantiferon", "AFB Smear", "Malaria Smear"]
-    )
+    prior = st.multiselect("Prior Negatives",["Blood Cx","CT Chest/Abd/Pelvis","HIV","AFB","ANA","TB"])
 
     run = st.button("Generate")
+    
 
-# ---------------------------------------------------------------------
-# Run app
-# ---------------------------------------------------------------------
+########################################
+# MAIN PANEL
+########################################
+
+st.title("FUO Grand Master v40")
+
 if run:
+
     positives = []
-    if sweats: positives.append("Night Sweats")
-    if wl: positives.append("Weight Loss")
-    if backpain: positives.append("Back Pain")
-    if bats: positives.append("Bird/Bat Droppings")
-    if farm: positives.append("Farm Animals")
-    if dairy: positives.append("Unpasteurized Dairy")
-    if africa: positives.append("Travel Africa")
-    if se_asia: positives.append("Travel SE Asia")
-    if s_amer: positives.append("Travel S America")
-    if tb: positives.append("TB Exposure")
-    if ivdu: positives.append("IV Drug Use")
-    if prosthetic: positives.append("Prosthetic Valve")
-    if murmur: positives.append("New Murmur")
+
+    if night_sweats: positives.append("Night Sweats")
+    if weight_loss: positives.append("Weight Loss")
+    if ha: positives.append("Headache")
+    if vision: positives.append("Vision Changes")
+    if jaw: positives.append("Jaw Claudication")
+    if cough: positives.append("Dry Cough")
     if dyspnea: positives.append("Dyspnea")
-    if eos: positives.append("Eosinophilia")
+    if abd: positives.append("Abdominal Pain")
+    if diarrhea: positives.append("Diarrhea")
+    if hepatodynia: positives.append("Hepatodynia")
     if rash: positives.append("Rash")
-    if pancytopenia: positives.append("Pancytopenia")
+    if palmsoles: positives.append("Rash (Palms/Soles)")
+    if joint: positives.append("Joint Pain")
+    if ivdu: positives.append("IVDU")
+    if cats: positives.append("Cats")
+    if livestock: positives.append("Farm Animals")
+    if bats: positives.append("Bird/Bat Droppings")
+    if dairy: positives.append("Unpasteurized Dairy")
+    if well: positives.append("Well Water")
+    if homeless: positives.append("Homelessness")
+    if tbexp: positives.append("TB Exposure")
+    if pancyt: positives.append("Pancytopenia")
     if ferritin3k: positives.append("Ferritin >3000")
-    if trig: positives.append("Hypertriglyceridemia")
+    if hypertrig: positives.append("Hypertriglyceridemia")
+    if eos: positives.append("Eosinophilia")
+    if splen: positives.append("Splenomegaly")
+    if hematuria: positives.append("Hematuria")
+    if tropics: positives.append("Travel (Tropics)")
+    if mexico: positives.append("Travel (Med/Mexico)")
+    if swus: positives.append("Travel (Southwest US)")
+    if africa: positives.append("Travel (Sub-Saharan Africa)")
+    if age>50: positives.append("Age >50")
+    if sex=="Female": positives.append("Female Sex")
 
     inputs = {
         "age": age,
-        "hiv": hiv,
+        "sex": sex,
+        "immune": immune,
         "cd4": cd4,
-        "on_med": on_med,
-        "on_abx": on_abx,
-        "missouri": missouri,
         "positives": positives,
-        "prior_details": prior
+        "prior": prior,
+        "tmax": tmax,
+        "hr": hr,
+        "dur": dur,
     }
 
-    dx, orders = run_engine(inputs)
+    dx_list, order_bucket = get_diff(inputs)
+    optimized = optimize_orders(order_bucket, inputs)
+    note_text = note(inputs, dx_list, optimized)
 
     col1, col2 = st.columns([1,1])
 
     with col1:
-        st.subheader("Differential (Weighted)")
+        st.subheader("Differential")
+        if faget(tmax,hr):
+            st.error("Relative Bradycardia (Faget's Sign)")
 
-        for d in dx:
-            style = "crit" if d["type"]=="CRITICAL" else \
-                    "endemic" if d["type"]=="ENDEMIC" else \
-                    "noninf" if d["type"]=="NONINF" else "inf"
-
-            st.markdown(f"<div class='{style}'>", unsafe_allow_html=True)
-            st.markdown(f"### {d['dx']}")
-            st.caption("Triggers: " + ", ".join(d["triggers"]))
-            st.markdown("</div>", unsafe_allow_html=True)
+        for d in dx_list:
+            css = "critical" if d["type"]=="Critical" else ("endemic" if "Endemic" in d["type"] else ("noninf" if d["type"]=="Non-Infectious" else "infectious"))
+            st.markdown(f"<div class='{css}'>**{d['dx']}**<br><small>{', '.join(d['triggers'])}</small></div>", unsafe_allow_html=True)
 
     with col2:
-        st.subheader("Recommended Workup")
-
-        st.markdown("<div class='tier0'>", unsafe_allow_html=True)
-        for o in sorted(orders):
-            st.markdown(f"- {o}")
-        st.markdown("</div>", unsafe_allow_html=True)
-
         st.subheader("Consult Note")
-        text = f"{age}yo {sex} with {duration} days of fever. Tmax {tmax}, HR {hr}.\n"
-        if faget(tmax, hr):
-            text += "Relative bradycardia present.\n"
-        text += "Differential: " + ", ".join([d["dx"] for d in dx]) + "\n"
-        text += "Recommended workup: " + ", ".join(sorted(orders)) + "\n"
-        st.text_area("Note", text, height=300)
+        st.text_area("",note_text,height=500)
+        st.download_button("Download Note",note_text,file_name="FUO_note.txt")
