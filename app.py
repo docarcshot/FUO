@@ -410,6 +410,9 @@ with st.sidebar:
     hr = st.number_input("Heart rate at Tmax", 40, 160, 95)
     fever_days = st.number_input("Days of fever", 3, 365, 21)
     on_abx = st.checkbox("Currently on antibiotics")
+    
+    # Rheumatology gate
+suspect_rheum = st.checkbox("Suspect rheumatologic etiology", value=False)
 
     # Symptoms and exposures with expanders
     st.header("Symptoms (ROS)")
