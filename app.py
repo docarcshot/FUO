@@ -339,7 +339,11 @@ st.sidebar.title("FUO Engine (>3 weeks)")
 age = st.sidebar.number_input("Age", 18, 100, 50)
 sex = st.sidebar.selectbox("Sex", ["Male", "Female"])
 fever_days = st.sidebar.number_input("Duration of fever (days)", 21, 365, 30)
-immune_status = st.sidebar.selectbox("Immune status", ["Immunocompetent", "HIV", "Transplant", "Biologics", "Chemotherapy", "Cirrhosis"])
+
+immune_status = st.sidebar.selectbox(
+    "Immune status",
+    ["Immunocompetent", "HIV", "Transplant", "Biologics", "Chemotherapy", "Cirrhosis"]
+)
 cd4 = 500
 if immune_status == "HIV":
     cd4 = st.sidebar.slider("CD4", 0, 1200, 450)
@@ -348,40 +352,26 @@ suspect_rheum = st.sidebar.checkbox("Suspect rheumatologic disease", value=False
 
 st.sidebar.markdown("---")
 
-# UI → trigger booleans
-raw_ui = {
-    "night_sweats": st.sidebar.checkbox("Night sweats"),
-    "weight_loss": st.sidebar.checkbox("Weight loss"),
-    "arthralgia": st.sidebar.checkbox("Joint pain/arthralgia"),
-    "back_pain": st.sidebar.checkbox("Back pain"),
-    "headache": st.sidebar.checkbox("Headache"),
-    "vision_changes": st.sidebar.checkbox("Vision changes"),
-    "diarrhea": st.sidebar.checkbox("Diarrhea"),
-    "pancytopenia": st.sidebar.checkbox("Pancytopenia"),
-    "lymphadenopathy": st.sidebar.checkbox("Lymphadenopathy"),
-    "splenomegaly": st.sidebar.checkbox("Splenomegaly"),
-    "cats": st.sidebar.checkbox("Cats"),
-    "livestock": st.sidebar.checkbox("Livestock"),
-    "bird_bat": st.sidebar.checkbox("Bird/bat exposure"),
-    "unpasteurized_dairy": st.sidebar.checkbox("Unpasteurized dairy"),
-    "ivdu": st.sidebar.checkbox("IV drug use"),
-    "homeless": st.sidebar.checkbox("Homelessness/incarceration"),
-    "tb_contact": st.sidebar.checkbox("TB exposure"),
-    "high_tb_travel": st.sidebar.checkbox("Travel to high TB region"),
-    "missouri": st.sidebar.checkbox("Missouri/Ohio Valley"),
-    "sw_travel": st.sidebar.checkbox("Southwest US travel"),
-    "cirrhosis": st.sidebar.checkbox("Cirrhosis"),
-}
 
-canonical_triggers = canonicalize(raw_ui)
+# -------- RESTORED EXPANDABLE SECTIONS --------
 
-# Prior negatives
-prior_negatives = st.sidebar.multiselect(
-    "Prior negative tests",
-    ["Blood cultures", "HIV", "Quantiferon", "ANA", "RF", "CCP", "dsDNA", "C3/C4", "Histo", "Blasto", "Cocci", "Crypto"]
-)
+# Exposures & Risk Factors
+with st.sidebar.expander("Exposures and Social Risks", expanded=True):
+    raw_ui = {}
+    raw_ui["missouri"] = st.checkbox("Missouri/Ohio Valley")
+    raw_ui["ivdu"] = st.checkbox("IV drug use")
+    raw_ui["homeless"] = st.checkbox("Homelessness / incarceration")
+    raw_ui["livestock"] = st.checkbox("Livestock exposure")
+    raw_ui["bird_bat"] = st.checkbox("Bird/Bat exposure")
+    raw_ui["unpasteurized_dairy"] = st.checkbox("Unpasteurized dairy")
+    raw_ui["sw_travel"] = st.checkbox("Southwest US travel")
+    raw_ui["high_tb_travel"] = st.checkbox("Travel to high TB region")
+    raw_ui["tb_contact"] = st.checkbox("Known TB exposure")
+    raw_ui["cats"] = st.checkbox("Cats")
 
-run = st.sidebar.button("Run FUO Logic")
+# Review of Systems / Exam Findings
+with st
+
 
 
 # --- MAIN OUTPUT ---
