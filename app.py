@@ -1,10 +1,8 @@
 import streamlit as st
 import datetime
 
-# --- CONFIGURATION ---
 st.set_page_config(page_title="ID-CDSS | FUO Engine v1", layout="wide")
 
-# --- STYLES ---
 st.markdown("""
 <style>
     .tier0 { border-left: 6px solid #000; padding: 10px; background-color: #f0f0f0; }
@@ -17,15 +15,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- HELPERS ---
 def has_faget(tmax_f, hr):
     return tmax_f >= 102.0 and hr < 100
 
-# --- PRIOR WORKUP MAP (for de-duplication) ---
 PRIOR_MAP = {
     "Negative blood cultures": ["Blood cultures x2", "Blood cultures x3", "Blood cultures (hold 21d)"],
     "Negative TB testing": ["Quantiferon TB", "T-Spot TB"],
-    "Negative Histo antigen": ["Urine Histoplasma antigen", "Serum Histoplasma antigen"],
+    "Negative Histo antigen": ["Urine Histoplasma antigen", "Serum Histoplasma antibody"],
     "Negative Bartonella serology": ["Bartonella serology"],
     "Negative Brucella serology": ["Brucella serology"],
     "Negative HIV": ["HIV 1/2 Ag/Ab (4th gen)"],
@@ -33,184 +29,91 @@ PRIOR_MAP = {
     "Normal echocardiogram": ["TTE", "TEE"],
 }
 
-# --- FUO DATABASE ---
-# Only stuff that plausibly shows up as FUO (weeks of fever), not acutely crashing ICU diagnoses
 DISEASES = [
     {
         "dx": "Infective endocarditis",
         "category": "Infectious",
-        "triggers": [
-            "New murmur",
-            "IV drug use",
-            "Prosthetic valve",
-            "Embolic phenomena",
-        ],
+        "triggers": ["New murmur", "IV drug use", "Prosthetic valve", "Embolic phenomena"],
         "min_fever_days": 5,
-        "orders": [
-            ("Blood cultures x3", 0),
-            ("TTE", 2),
-            ("TEE", 3),
-        ],
+        "orders": [("Blood cultures x3", 0), ("TTE", 2), ("TEE", 3)],
     },
     {
         "dx": "Tuberculosis (miliary or extrapulmonary)",
         "category": "Infectious",
-        "triggers": [
-            "Weight loss",
-            "Night sweats",
-            "Chronic cough",
-            "Hemoptysis",
-            "TB exposure",
-            "Homelessness/incarceration",
-            "High TB burden travel",
-        ],
+        "triggers": ["Weight loss", "Night sweats", "Chronic cough", "Hemoptysis", "TB exposure",
+                     "Homelessness/incarceration", "High TB burden travel"],
         "min_fever_days": 14,
-        "orders": [
-            ("Quantiferon TB", 1),
-            ("AFB smear x3", 1),
-            ("CT chest/abdomen/pelvis with contrast", 2),
-        ],
+        "orders": [("Quantiferon TB", 1), ("AFB smear x3", 1),
+                   ("CT chest/abdomen/pelvis with contrast", 2)],
     },
     {
         "dx": "Disseminated histoplasmosis",
-        "category": "Endemic fungal",
-        "triggers": [
-            "Bird/bat exposure",
-            "Cave exposure",
-            "Missouri/Ohio River Valley",
-            "Pancytopenia",
-            "Splenomegaly",
-            "Oral ulcers",
-        ],
+        "category": "Infectious",
+        "triggers": ["Bird/bat exposure", "Cave exposure", "Missouri/Ohio River Valley",
+                     "Pancytopenia", "Splenomegaly", "Oral ulcers"],
         "min_fever_days": 7,
-        "orders": [
-            ("Urine Histoplasma antigen", 1),
-            ("Serum Histoplasma antigen", 1),
-            ("Ferritin", 1),
-        ],
+        "orders": [("Urine Histoplasma antigen", 1), ("Serum Histoplasma antibody", 1),
+                   ("Ferritin", 1), ("Serum Blastomyces antibody", 1)],
     },
     {
         "dx": "Bartonella (endocarditis/bacteremia)",
         "category": "Infectious",
-        "triggers": [
-            "Cats",
-            "Homelessness",
-            "Body lice",
-            "IV drug use",
-        ],
+        "triggers": ["Cats", "Homelessness/incarceration", "Body lice", "IV drug use"],
         "min_fever_days": 7,
-        "orders": [
-            ("Bartonella serology", 1),
-        ],
+        "orders": [("Bartonella serology", 1)],
     },
     {
         "dx": "Brucellosis",
         "category": "Infectious",
-        "triggers": [
-            "Unpasteurized dairy",
-            "Livestock exposure",
-            "Travel Mediterranean/Mexico",
-            "Back pain",
-            "Night sweats",
-        ],
+        "triggers": ["Unpasteurized dairy", "Livestock exposure", "Travel Mediterranean/Mexico",
+                     "Back pain", "Night sweats"],
         "min_fever_days": 7,
-        "orders": [
-            ("Brucella serology", 1),
-            ("Blood cultures (hold 21d)", 0),
-        ],
+        "orders": [("Brucella serology", 1), ("Blood cultures (hold 21d)", 0)],
     },
     {
         "dx": "Q fever (Coxiella)",
         "category": "Infectious",
-        "triggers": [
-            "Farm animals",
-            "Parturient animals",
-            "Rural living",
-            "Well water",
-        ],
+        "triggers": ["Farm animals", "Parturient animals", "Rural living", "Well water"],
         "min_fever_days": 7,
-        "orders": [
-            ("Coxiella serology", 1),
-            ("TTE", 2),
-        ],
+        "orders": [("Coxiella serology", 1), ("TTE", 2)],
     },
     {
         "dx": "Cryptococcosis (meningitis/disseminated)",
         "category": "Infectious",
-        "triggers": [
-            "Headache",
-            "Vision changes",
-            "HIV",
-            "Biologics",
-            "Chemotherapy",
-        ],
+        "triggers": ["Headache", "Vision changes", "HIV", "Biologics", "Chemotherapy"],
         "min_fever_days": 5,
-        "orders": [
-            ("Serum cryptococcal antigen", 1),
-            ("Consider LP with CSF CrAg", 3),
-        ],
+        "orders": [("Serum cryptococcal antigen", 1), ("Consider LP with CSF CrAg", 3)],
     },
     {
         "dx": "Disseminated MAC",
         "category": "Infectious",
-        "triggers": [
-            "HIV",
-            "Night sweats",
-            "Weight loss",
-            "Diarrhea",
-        ],
+        "triggers": ["HIV", "Night sweats", "Weight loss", "Diarrhea"],
         "min_fever_days": 14,
-        "orders": [
-            ("AFB blood culture", 1),
-            ("CT abdomen/pelvis (nodes, organomegaly)", 2),
-        ],
+        "orders": [("AFB blood culture", 1),
+                   ("CT abdomen/pelvis (nodes, organomegaly)", 2)],
     },
     {
         "dx": "Temporal arteritis (GCA)",
         "category": "Non-infectious",
-        "triggers": [
-            "Age > 50",
-            "Headache",
-            "Jaw claudication",
-            "Vision changes",
-        ],
+        "triggers": ["Age > 50", "Headache", "Jaw claudication", "Vision changes"],
         "min_fever_days": 3,
-        "orders": [
-            ("ESR", 0),
-            ("CRP", 0),
-            ("Temporal artery ultrasound", 2),
-        ],
+        "orders": [("ESR", 0), ("CRP", 0),
+                   ("Temporal artery ultrasound", 2)],
     },
     {
         "dx": "Adult Still disease",
         "category": "Non-infectious",
-        "triggers": [
-            "Arthralgia",
-            "Rash",
-            "Ferritin > 1000",
-            "Night sweats",
-        ],
+        "triggers": ["Arthralgia", "Rash", "Ferritin > 1000", "Night sweats"],
         "min_fever_days": 7,
-        "orders": [
-            ("Ferritin", 0),
-            ("ANA", 1),
-            ("RF", 1),
-        ],
+        "orders": [("Ferritin", 0)],
     },
     {
         "dx": "Lymphoma or other occult malignancy",
         "category": "Non-infectious",
-        "triggers": [
-            "Weight loss",
-            "Night sweats",
-            "Lymphadenopathy",
-            "Splenomegaly",
-        ],
+        "triggers": ["Weight loss", "Night sweats", "Lymphadenopathy", "Splenomegaly"],
         "min_fever_days": 14,
-        "orders": [
-            ("LDH", 1),
-            ("CT chest/abdomen/pelvis with contrast", 2),
-        ],
+        "orders": [("LDH", 1),
+                   ("CT chest/abdomen/pelvis with contrast", 2)],
     },
 ]
 
@@ -221,15 +124,13 @@ BASELINE_ORDERS = [
     "CRP",
     "Urinalysis",
 ]
-
-# --- LOGIC ENGINE ---
 def build_differential(inputs):
-    positives = inputs["positives"]
+    positives = list(inputs["positives"])
     fever_days = inputs["fever_days"]
     immune = inputs["immune"]
     cd4 = inputs.get("cd4")
+    age = inputs["age"]
 
-    # Derived risk flags
     risk_hiv = immune == "HIV"
     risk_transplant = immune == "Transplant"
     risk_immunosupp = immune in ["HIV", "Transplant", "Biologics", "Chemotherapy"]
@@ -247,23 +148,19 @@ def build_differential(inputs):
         score = 0
         reasons = []
 
-        # Basic trigger matching
         for t in d["triggers"]:
             if t in positives:
                 score += 1
                 reasons.append(t)
 
-        # Fever duration weighting
         min_days = d.get("min_fever_days", 0)
         if fever_days >= min_days:
             score += 1
             reasons.append(f"Fever ≥ {min_days} days")
         else:
-            score -= 1  # less likely if duration very short for that syndrome
+            score -= 1
 
-        # Soft rules for specific entities
-        if d["dx"].startswith("Cryptococcosis"):
-            # extra weight if CD4 low or immunosuppressed
+        if d["dx"] == "Cryptococcosis (meningitis/disseminated)":
             if risk_immunosupp:
                 score += 1
                 reasons.append("Immunosuppressed")
@@ -272,6 +169,8 @@ def build_differential(inputs):
                 reasons.append("CD4 < 200")
 
         if d["dx"] == "Disseminated MAC":
+            if not risk_hiv:
+                continue
             if cd4 is not None and cd4 < 100:
                 score += 1
                 reasons.append("CD4 < 100")
@@ -279,72 +178,81 @@ def build_differential(inputs):
                 score -= 1
 
         if d["dx"] == "Temporal arteritis (GCA)":
-            if inputs["age"] < 50:
-                score = 0
-                reasons = []
+            if age < 50:
+                continue
 
-        # Only keep positive scores
         if score > 0:
-            active.append(
-                {
-                    "dx": d["dx"],
-                    "category": d["category"],
-                    "score": score,
-                    "reasons": reasons,
-                    "orders": d["orders"],
-                }
-            )
+            active.append({
+                "dx": d["dx"],
+                "category": d["category"],
+                "score": score,
+                "reasons": reasons,
+                "orders": d["orders"],
+            })
 
-    # Sort by score descending
-    active.sort(key=lambda x: x["score"], reverse=True)
-    return active
+    infectious = [x for x in active if x["category"] == "Infectious"]
+    noninfectious = [x for x in active if x["category"] != "Infectious"]
 
-def build_orders(active, prior_neg):
-    # prior_neg is list of labels from the multiselect
+    infectious.sort(key=lambda x: x["score"], reverse=True)
+    noninfectious.sort(key=lambda x: x["score"], reverse=True)
+
+    return infectious + noninfectious
+
+
+def build_orders(active, prior_neg, include_rheum):
     orders_by_tier = {0: set(BASELINE_ORDERS), 1: set(), 2: set(), 3: set()}
 
     for item in active:
         for order_name, tier in item["orders"]:
             orders_by_tier[tier].add(order_name)
 
-    # Map prior negatives to actual orders and strip them out
     already_done = set()
     for label in prior_neg:
         mapped = PRIOR_MAP.get(label, [])
         already_done.update(mapped)
 
     for tier in orders_by_tier:
-        filtered = set()
+        newset = set()
         for o in orders_by_tier[tier]:
             if not any(done in o for done in already_done):
-                filtered.add(o)
-        orders_by_tier[tier] = filtered
+                newset.add(o)
+        orders_by_tier[tier] = newset
+
+    if include_rheum:
+        orders_by_tier[1].add("ANA")
+        orders_by_tier[1].add("RF")
+        orders_by_tier[1].add("CCP antibody")
+        orders_by_tier[1].add("ENA reflex panel")
+        orders_by_tier[2].add("Temporal artery ultrasound")
 
     return orders_by_tier
+
 
 def build_note(inputs, active, orders_by_tier):
     lines = []
     today = datetime.date.today().isoformat()
+    age = inputs["age"]
+    sex = inputs["sex"]
+    immune = inputs["immune"]
+    cd4 = inputs.get("cd4")
+    tmax = inputs["tmax"]
+    hr = inputs["hr"]
+    fever_days = inputs["fever_days"]
+    positives = inputs["positives"]
+
     lines.append(f"Date: {today}")
-
-    line1 = f"{inputs['age']} year old {inputs['sex']} with fever of unknown origin"
-    if inputs["immune"] != "Immunocompetent":
-        line1 += f" with {inputs['immune'].lower()}."
+    if immune != "Immunocompetent":
+        lines.append(f"{age} year old {sex} with fever of unknown origin with {immune.lower()}.")
     else:
-        line1 += "."
-    lines.append(line1)
+        lines.append(f"{age} year old {sex} with fever of unknown origin.")
 
-    lines.append(
-        f"Fever reported for {inputs['fever_days']} days, Tmax {inputs['tmax']} F, HR at Tmax {inputs['hr']} bpm."
-    )
+    lines.append(f"Fever reported for {fever_days} days, Tmax {tmax} F, HR at Tmax {hr} bpm.")
 
-    if has_faget(inputs["tmax"], inputs["hr"]):
+    if has_faget(tmax, hr):
         lines.append("Vitals notable for relative bradycardia (Faget sign).")
 
-    # Summarize exposures/symptoms
-    if inputs["positives"]:
-        context = ", ".join(sorted(set(inputs["positives"])))
-        lines.append(f"Key history and exam features: {context}.")
+    if positives:
+        lines.append("Key history and exam features: " + ", ".join(sorted(set(positives))) + ".")
     else:
         lines.append("No focal symptoms or high risk exposures elicited.")
 
@@ -356,16 +264,15 @@ def build_note(inputs, active, orders_by_tier):
     lines.append("Assessment and differential:")
 
     if not active:
-        lines.append("- Persistent FUO without clear syndromic match at this stage.")
+        lines.append("- Persistent FUO with no strong syndromic signals at this stage.")
     else:
         for dx in active[:8]:
-            reason_str = ", ".join(sorted(set(dx["reasons"]))) if dx["reasons"] else "clinical context"
-            lines.append(f"- {dx['dx']} ({dx['category']}): supported by {reason_str}.")
+            r = ", ".join(sorted(set(dx["reasons"]))) if dx["reasons"] else "clinical context"
+            lines.append(f"- {dx['dx']} ({dx['category']}): supported by {r}.")
 
     lines.append("")
     lines.append("Plan:")
 
-    # Tier 0 actions
     if orders_by_tier[0]:
         lines.append("Baseline and immediate tests:")
         for o in sorted(orders_by_tier[0]):
@@ -389,9 +296,13 @@ def build_note(inputs, active, orders_by_tier):
         for o in sorted(orders_by_tier[3]):
             lines.append(f"- [ ] {o}")
 
-    return "\n".join(lines)
+    if immune != "HIV" and "Negative HIV" not in inputs["prior_neg"]:
+        lines.append("")
+        lines.append("If HIV screening is positive or CD4 low, evaluate for disseminated MAC.")
 
-# --- UI: SIDEBAR ---
+    return "\n".join(lines)
+st.title("ID-CDSS | FUO Engine")
+
 with st.sidebar:
     st.title("FUO Engine")
 
@@ -428,7 +339,6 @@ with st.sidebar:
     fever_days = st.number_input("Days of fever", 3, 365, 21)
     on_abx = st.checkbox("Currently on antibiotics")
 
-    # Structured ROS: subjective
     st.header("Symptoms (ROS)")
 
     st.subheader("Constitutional")
@@ -473,8 +383,6 @@ with st.sidebar:
     splenomegaly = heme_cols[1].checkbox("Splenomegaly")
     pancytopenia = heme_cols[2].checkbox("Pancytopenia")
 
-    # Objective-ish PE flags are mixed in above; it is still clinically usable.
-
     st.header("Exposures and risks")
 
     st.subheader("Animals and environment")
@@ -510,100 +418,59 @@ with st.sidebar:
         ],
     )
 
+    st.header("Rheumatologic evaluation")
+    include_rheum = st.checkbox("Include rheumatologic labs", value=False)
+
 run = st.button("Generate FUO plan")
 
-# --- MAIN PANEL ---
-st.title("ID-CDSS | FUO Engine")
-
 if run:
-    # Build positives list
     positives = []
 
-    # Constitutional
-    if night_sweats:
-        positives.append("Night sweats")
-    if weight_loss:
-        positives.append("Weight loss")
-    if fatigue:
-        positives.append("Fatigue")
+    if night_sweats: positives.append("Night sweats")
+    if weight_loss: positives.append("Weight loss")
+    if fatigue: positives.append("Fatigue")
 
-    # Neuro
-    if headache:
-        positives.append("Headache")
-    if vision_changes:
-        positives.append("Vision changes")
-    if seizures:
-        positives.append("Seizures")
+    if headache: positives.append("Headache")
+    if vision_changes: positives.append("Vision changes")
+    if seizures: positives.append("Seizures")
 
-    # Respiratory
-    if chronic_cough:
-        positives.append("Chronic cough")
-    if hemoptysis:
-        positives.append("Hemoptysis")
-    if dyspnea:
-        positives.append("Dyspnea")
+    if chronic_cough: positives.append("Chronic cough")
+    if hemoptysis: positives.append("Hemoptysis")
+    if dyspnea: positives.append("Dyspnea")
 
-    # GI
-    if abdominal_pain:
-        positives.append("Abdominal pain")
-    if diarrhea:
-        positives.append("Diarrhea")
-    if ruq_pain:
-        positives.append("RUQ pain / hepatodynia")
+    if abdominal_pain: positives.append("Abdominal pain")
+    if diarrhea: positives.append("Diarrhea")
+    if ruq_pain: positives.append("RUQ pain / hepatodynia")
 
-    # MSK
-    if arthralgia:
-        positives.append("Arthralgia")
-    if back_pain:
-        positives.append("Back pain")
-    if myalgia:
-        positives.append("Myalgias")
+    if arthralgia: positives.append("Arthralgia")
+    if back_pain: positives.append("Back pain")
+    if myalgia: positives.append("Myalgias")
 
-    # Skin
-    if rash:
-        positives.append("Rash")
-    if palmar_rash:
-        positives.append("Palms/soles rash")
-    if nodules:
-        positives.append("Skin nodules")
+    if rash: positives.append("Rash")
+    if palmar_rash: positives.append("Palms/soles rash")
+    if nodules: positives.append("Skin nodules")
 
-    # Lymph/HEME
-    if lymphadenopathy:
-        positives.append("Lymphadenopathy")
-    if splenomegaly:
-        positives.append("Splenomegaly")
-    if pancytopenia:
-        positives.append("Pancytopenia")
+    if lymphadenopathy: positives.append("Lymphadenopathy")
+    if splenomegaly: positives.append("Splenomegaly")
+    if pancytopenia: positives.append("Pancytopenia")
 
-    # Exposures
-    if cats:
-        positives.append("Cats")
+    if cats: positives.append("Cats")
     if livestock:
         positives.append("Livestock exposure")
         positives.append("Farm animals")
-    if bird_bat:
-        positives.append("Bird/bat exposure")
-    if unpasteurized_dairy:
-        positives.append("Unpasteurized dairy")
+    if bird_bat: positives.append("Bird/bat exposure")
+    if unpasteurized_dairy: positives.append("Unpasteurized dairy")
     if rural:
         positives.append("Rural living")
         positives.append("Farm animals")
-    if body_lice:
-        positives.append("Body lice")
-    if missouri:
-        positives.append("Missouri/Ohio River Valley")
-    if sw_us:
-        positives.append("US Southwest travel")
+    if body_lice: positives.append("Body lice")
+    if missouri: positives.append("Missouri/Ohio River Valley")
+    if sw_us: positives.append("US Southwest travel")
 
-    # Social / TB
-    if ivdu:
-        positives.append("IV drug use")
-    if homeless:
-        positives.append("Homelessness/incarceration")
-    if tb_contact:
-        positives.append("TB exposure")
-    if high_tb_travel:
-        positives.append("High TB burden travel")
+    if ivdu: positives.append("IV drug use")
+    if homeless: positives.append("Homelessness/incarceration")
+    if tb_contact: positives.append("TB exposure")
+    if high_tb_travel: positives.append("High TB burden travel")
 
     inputs = {
         "age": age,
@@ -618,9 +485,8 @@ if run:
         "on_abx": on_abx,
     }
 
-    # Run engine
     active = build_differential(inputs)
-    orders_by_tier = build_orders(active, prior_neg)
+    orders_by_tier = build_orders(active, prior_neg, include_rheum)
     note_text = build_note(inputs, active, orders_by_tier)
 
     col1, col2 = st.columns(2)
@@ -631,23 +497,29 @@ if run:
                 "<div class='critical'>Relative bradycardia detected (possible Faget sign).</div>",
                 unsafe_allow_html=True,
             )
-
         st.subheader("Weighted differential (FUO-focused)")
 
         if not active:
-            st.write("No specific FUO syndromes triggered. Consider broad stepwise workup.")
+            st.write("No specific FUO syndromes triggered.")
         else:
             for dx in active:
                 if dx["category"] == "Non-infectious":
                     css_class = "noninf"
-                elif dx["category"].startswith("Endemic"):
+                elif dx["category"] == "Infectious" and dx["dx"] in [
+                    "Disseminated histoplasmosis", "Cryptococcosis (meningitis/disseminated)",
+                    "Disseminated MAC", "Q fever (Coxiella)", "Brucellosis",
+                    "Bartonella (endocarditis/bacteremia)"
+                ]:
                     css_class = "endo"
                 else:
                     css_class = ""
+
                 if css_class:
                     st.markdown(f"<div class='{css_class}'>", unsafe_allow_html=True)
+
                 st.markdown(f"**{dx['dx']}**")
                 st.caption("Triggers: " + ", ".join(sorted(set(dx["reasons"]))))
+
                 if css_class:
                     st.markdown("</div>", unsafe_allow_html=True)
 
