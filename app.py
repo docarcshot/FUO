@@ -404,17 +404,15 @@ with st.sidebar:
     if immune == "HIV":
         cd4 = st.slider("CD4 count", 0, 1200, 300)
 
-    # Fever profile
     st.header("Fever Profile")
     tmax = st.number_input("Tmax (F)", 98.0, 107.0, 101.5, step=0.1)
     hr = st.number_input("Heart rate at Tmax", 40, 160, 95)
     fever_days = st.number_input("Days of fever", 3, 365, 21)
     on_abx = st.checkbox("Currently on antibiotics")
-    
-    # Rheumatology gate
-suspect_rheum = st.checkbox("Suspect rheumatologic etiology", value=False)
 
-    # Symptoms and exposures with expanders
+    # RHEUMATOLOGY GATE (restored)
+    suspect_rheum = st.checkbox("Suspect rheumatologic etiology", value=False)
+
     st.header("Symptoms (ROS)")
 
     with st.expander("Constitutional"):
@@ -456,8 +454,8 @@ suspect_rheum = st.checkbox("Suspect rheumatologic etiology", value=False)
 
     with st.expander("Animals and environment"):
         cats = st.checkbox("Cat exposure")
-        livestock = st.checkbox("Livestock/farm animals")
-        bird_bat = st.checkbox("Bird/bat or cave exposure")
+        livestock = st.checkbox("Livestock / farm animals")
+        bird_bat = st.checkbox("Bird / bat or cave exposure")
         unpasteurized_dairy = st.checkbox("Unpasteurized dairy")
         rural = st.checkbox("Rural or farm living")
         body_lice = st.checkbox("Body lice")
@@ -474,7 +472,7 @@ suspect_rheum = st.checkbox("Suspect rheumatologic etiology", value=False)
 
     st.header("Prior Workup (Negative)")
     prior_neg = st.multiselect(
-        "Mark studies already done & negative",
+        "Mark studies already done and negative",
         [
             "Negative blood cultures",
             "Negative TB testing",
@@ -488,6 +486,7 @@ suspect_rheum = st.checkbox("Suspect rheumatologic etiology", value=False)
     )
 
     run = st.button("Generate FUO Plan")
+
 
 # --- MAIN PANEL ---
 st.title("ID-CDSS | FUO Engine v2")
