@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Appearance for differential blocks
+# CSS (unchanged)
 st.markdown("""
 <style>
     .dx-block {
@@ -70,14 +70,17 @@ def short_name(dx):
 # ================================================================
 
 DISEASES = [
-    # INFECTIOUS --------------------------------------------------
+
+    # -------------------------------------------------------------
+    # INFECTIOUS
+    # -------------------------------------------------------------
     {
         "dx": "Infective endocarditis",
         "cat": "Infectious",
         "triggers": ["New murmur", "IV drug use", "Embolic phenomena", "Prosthetic valve"],
         "orders": [
-            ("Blood cultures x3",     0),
-            ("TTE",                    1),
+            ("Blood cultures x3", 0),
+            ("TTE", 1),
             ("TEE if concern persists after TTE", 3)
         ]
     },
@@ -143,7 +146,9 @@ DISEASES = [
         ]
     },
 
-    # ENDEMIC MYCOSES ---------------------------------------------
+    # -------------------------------------------------------------
+    # ENDEMIC MYCOSES
+    # -------------------------------------------------------------
     {
         "dx": "Disseminated histoplasmosis",
         "cat": "Endemic",
@@ -170,13 +175,15 @@ DISEASES = [
         "orders": [("Coccidioides serologic cascade (IgG/IgM/CF)", 1)]
     },
 
-    # IMMUNOCOMPROMISED -------------------------------------------
+    # -------------------------------------------------------------
+    # IMMUNOCOMPROMISED
+    # -------------------------------------------------------------
     {
         "dx": "Disseminated MAC",
         "cat": "Immunocompromised",
         "requires_hiv": True,
         "triggers": ["HIV", "Night sweats", "Weight loss", "Diarrhea"],
-        "soft_triggers_transplant": ["Lung"],  # optional bump
+        "soft_triggers_transplant": ["Lung"],
         "orders": [
             ("AFB blood culture", 1),
             ("CT abdomen/pelvis (nodes, organomegaly)", 2)
@@ -195,7 +202,9 @@ DISEASES = [
         ]
     },
 
-    # RHEUM --------------------------------------------------------
+    # -------------------------------------------------------------
+    # RHEUM
+    # -------------------------------------------------------------
     {
         "dx": "Temporal arteritis (GCA)",
         "cat": "Rheumatologic",
@@ -219,7 +228,9 @@ DISEASES = [
         ]
     },
 
-    # MALIGNANCY / NONINF -----------------------------------------
+    # -------------------------------------------------------------
+    # MALIGNANCY / NONINF
+    # -------------------------------------------------------------
     {
         "dx": "Lymphoma or occult malignancy",
         "cat": "Malignancy",
@@ -241,6 +252,8 @@ DISEASES = [
 ]
 
 BASELINE_ORDERS = ["CBC with differential", "CMP", "ESR", "CRP", "Urinalysis"]
+
+
 # ================================================================
 # PRIOR TEST NORMALIZATION
 # ================================================================
@@ -258,10 +271,11 @@ PRIOR_MAP = {
 
 
 # ================================================================
-# DIFFERENTIAL ENGINE
+# DIFFERENTIAL ENGINE (corrected MAC gating + sorting)
 # ================================================================
 
 def build_differential(inputs):
+
     positives = set(inputs["positives"])
     age = inputs["age"]
     immune = inputs["immune"]
@@ -296,26 +310,40 @@ def build_differential(inputs):
                 score += 1
                 reasons.append(t)
 
-        # Age
+        # Age gate
         if d.get("requires_age_min") and age < d["requires_age_min"]:
             continue
 
-        # HIV gating
+        # HIV gate
         if d.get("requires_hiv") and not risk_hiv:
             continue
 
-        # Neuro gating
+        # Neuro gate
         if d.get("requires_neuro") and not neuro_flag(positives):
             continue
 
-        # Transplant gating
+        # Transplant gate
         if d.get("requires_transplant") and not risk_tx:
             continue
 
-        # Soft transplant triggers (lung-liberal MAC)
+        # Soft transplant boosts
         if risk_tx and transplant_type in d.get("soft_triggers_transplant", []):
             score += 1
             reasons.append(f"{transplant_type} transplant")
+
+        # Corrected MAC gating
+        if d["dx"] == "Disseminated MAC":
+            # allow MAC only if:
+            # HIV with CD4 < 50 OR transplant (lung gets soft bump)
+            allow_mac = False
+
+            if risk_hiv and cd4 is not None and cd4 < 50:
+                allow_mac = True
+            if risk_tx and transplant_type == "Lung":
+                allow_mac = True
+
+            if not allow_mac:
+                continue
 
         if score > 0:
             active.append({
@@ -326,6 +354,7 @@ def build_differential(inputs):
                 "orders": d["orders"]
             })
 
+    # descending sort
     active.sort(key=lambda x: x["score"], reverse=True)
     return active
 
@@ -341,7 +370,7 @@ def build_orders(active, prior_neg):
         for order, tier in item["orders"]:
             orders_by_tier[tier].add(order)
 
-    # Remove prior negative equivalents
+    # Remove prior-neg equivalents
     already_done = set()
     for neg in prior_neg:
         already_done.update(PRIOR_MAP.get(neg, []))
@@ -369,15 +398,12 @@ def build_note(inputs, active, orders):
     lines.append(f"{age} year old {sex} with prolonged fever without a clear source.")
     lines.append(f"Tmax {inputs['tmax']} F with heart rate {inputs['hr']} bpm at peak. Fever has been present for {inputs['fever_days']} days.")
 
-    # Neuro flag
     if neuro_flag(inputs["positives"]):
         lines.append("Neurologic symptoms present; consider CNS involvement based on overall course.")
 
-    # Faget
     if has_faget(inputs["tmax"], inputs["hr"]):
         lines.append("Relative bradycardia present.")
 
-    # Feature summary
     if inputs["positives"]:
         lines.append("Features include: " + ", ".join(sorted(inputs["positives"])) + ".")
 
@@ -387,12 +413,10 @@ def build_note(inputs, active, orders):
     lines.append("")
     lines.append("Assessment and differential:")
 
-    # Group by category
     grouped = {}
     for dx in active:
         grouped.setdefault(dx["cat"], []).append(dx)
 
-    # Strong / possible / unlikely
     strong = [short_name(active[0]["dx"])] if active else []
     possible = [short_name(d["dx"]) for d in active[1:4]]
     unlikely = [short_name(d["dx"]) for d in active[4:8]]
@@ -407,26 +431,22 @@ def build_note(inputs, active, orders):
     lines.append("")
     lines.append("Plan:")
 
-    # TIER 0
     lines.append("Baseline studies:")
     for o in sorted(orders[0]):
         lines.append(f"- [ ] {o}")
 
-    # TIER 1
     if orders[1]:
         lines.append("")
         lines.append("Targeted testing:")
         for o in sorted(orders[1]):
             lines.append(f"- [ ] {o}")
 
-    # TIER 2
     if orders[2]:
         lines.append("")
         lines.append("Imaging:")
         for o in sorted(orders[2]):
             lines.append(f"- [ ] {o}")
 
-    # TIER 3
     if orders[3]:
         lines.append("")
         lines.append("Advanced diagnostics:")
@@ -434,21 +454,23 @@ def build_note(inputs, active, orders):
             lines.append(f"- [ ] {o}")
 
     return "\n".join(lines)
+
+
 # ================================================================
-# SIDEBAR UI (PATCHED — no duplicate keys)
+# SIDEBAR UI (no duplicate keys)
 # ================================================================
 
 with st.sidebar:
+
     st.title("FUO Engine v3")
 
-    # Clear button (safe)
-    if st.button("Clear all inputs", key="btn_clear"):
+    # Clear button
+    if st.button("Clear all inputs", key="btn_clear_all"):
         for k in list(st.session_state.keys()):
-            if k.startswith("ui_"):   # only reset user-entered fields
+            if k.startswith("ui_") or k.startswith("btn_"):
                 del st.session_state[k]
         st.experimental_rerun()
 
-    # Patient details
     st.header("Patient Data")
     c1, c2 = st.columns(2)
 
@@ -466,11 +488,9 @@ with st.sidebar:
     time_since_tx = None
     ebv_status = None
 
-    # HIV
     if immune == "HIV":
         cd4 = st.slider("CD4 count", 0, 1200, 300, key="ui_cd4")
 
-    # TRANSPLANT (Option B = separate expander)
     if immune == "Transplant":
         with st.expander("Transplant details", expanded=True):
             transplant_type = st.selectbox(
@@ -481,7 +501,7 @@ with st.sidebar:
             time_since_tx = st.number_input(
                 "Time since transplant (months)",
                 0, 600, 12,
-                key="ui_tx_time"
+                key="ui_tx_months"
             )
             ebv_status = st.selectbox(
                 "EBV status",
@@ -489,15 +509,15 @@ with st.sidebar:
                 key="ui_ebv"
             )
 
-    # FEVER
     st.header("Fever Profile")
     tmax = st.number_input("Tmax (F)", 98.0, 107.0, 101.5, step=0.1, key="ui_tmax")
     hr = st.number_input("Heart rate at Tmax", 40, 170, 95, key="ui_hr")
     fever_days = st.number_input("Days of fever", 1, 365, 14, key="ui_fever_days")
     on_abx = st.checkbox("On antibiotics", key="ui_on_abx")
 
-
-    # ======================== ROS ================================
+    # ------------------------------------------------------------
+    # ROS
+    # ------------------------------------------------------------
     st.header("Symptoms (ROS)")
 
     with st.expander("Constitutional", expanded=True):
@@ -536,14 +556,15 @@ with st.sidebar:
         splenomegaly = st.checkbox("Splenomegaly", key="ui_spl")
         pancytopenia = st.checkbox("Pancytopenia", key="ui_pan")
 
-
-    # ====================== EXPOSURES ============================
+    # ------------------------------------------------------------
+    # EXPOSURES
+    # ------------------------------------------------------------
     st.header("Exposures and Risks")
 
     with st.expander("Animals / Environment", expanded=True):
         cats = st.checkbox("Cat exposure", key="ui_cats")
         livestock = st.checkbox("Livestock / farm animals", key="ui_live")
-        bird_bat = st.checkbox("Bird/bat or cave exposure", key="ui_bb")
+        bird_bat = st.checkbox("Bird/bat exposure", key="ui_bb")
         unpasteurized_dairy = st.checkbox("Unpasteurized dairy", key="ui_dairy")
         rural = st.checkbox("Rural living", key="ui_rural")
         body_lice = st.checkbox("Body lice", key="ui_lice")
@@ -558,8 +579,9 @@ with st.sidebar:
         missouri = st.checkbox("Missouri / Ohio River Valley", key="ui_mo")
         sw_us = st.checkbox("US Southwest travel", key="ui_swus")
 
-
-    # ====================== PRIOR TESTS ==========================
+    # ------------------------------------------------------------
+    # PRIOR TESTS
+    # ------------------------------------------------------------
     st.header("Prior Workup (Negative)")
     prior_neg = st.multiselect(
         "Mark studies already done and negative",
@@ -576,7 +598,7 @@ with st.sidebar:
         key="ui_priorneg"
     )
 
-    run = st.button("Generate FUO Plan", key="btn_run")
+    run = st.button("Generate FUO Plan", key="btn_run_fuo")
 
 
 # ================================================================
@@ -586,9 +608,9 @@ with st.sidebar:
 st.title("ID-CDSS | FUO Engine v3")
 
 if run:
+
     positives = []
 
-    # Build POSITIVES list (clean)
     if night_sweats: positives.append("Night sweats")
     if weight_loss: positives.append("Weight loss")
     if fatigue: positives.append("Fatigue")
@@ -618,6 +640,7 @@ if run:
     if splenomegaly: positives.append("Splenomegaly")
     if pancytopenia: positives.append("Pancytopenia")
 
+    # exposures
     if cats: positives.append("Cats")
     if livestock:
         positives.append("Livestock exposure")
@@ -652,16 +675,17 @@ if run:
         "ebv_status": ebv_status
     }
 
-    # Differential + Orders + Note
     active = build_differential(inputs)
     orders = build_orders(active, prior_neg)
     note_text = build_note(inputs, active, orders)
 
-    # LAYOUT
     col1, col2 = st.columns(2)
 
-    # ---------------- Differential ----------------
+    # ------------------------------------------------------------
+    # DIFFERENTIAL
+    # ------------------------------------------------------------
     with col1:
+
         if has_faget(tmax, hr):
             st.markdown("<div class='dx-block noninf'><b>Relative bradycardia detected.</b></div>", unsafe_allow_html=True)
 
@@ -670,25 +694,34 @@ if run:
         if not active:
             st.write("No specific FUO syndromes triggered.")
         else:
-            # category order
             cat_order = ["Infectious", "Endemic", "Immunocompromised", "Rheumatologic", "Malignancy", "Noninfectious"]
             grouped = {cat: [] for cat in cat_order}
 
             for dx in active:
                 grouped[dx["cat"]].append(dx)
 
+            # category-to-css mapping (Option A)
+            css_map = {
+                "Infectious": "infectious",
+                "Endemic": "endemic",
+                "Immunocompromised": "immuno",
+                "Rheumatologic": "rheum",
+                "Malignancy": "malignancy",
+                "Noninfectious": "noninf"
+            }
+
             for cat in cat_order:
                 if grouped[cat]:
                     st.markdown(f"### {cat}")
                     for dx in grouped[cat]:
-                        cls = dx["cat"].lower()
-                        with st.container():
-                            st.markdown(f"<div class='dx-block {cls}'>", unsafe_allow_html=True)
-                            st.markdown(f"**{dx['dx']}**<br>Triggers: {', '.join(dx['reasons'])}", unsafe_allow_html=True)
-                            st.markdown("</div>", unsafe_allow_html=True)
+                        cls = css_map[dx["cat"]]
+                        st.markdown(f"<div class='dx-block {cls}'><b>{dx['dx']}</b><br>Triggers: {', '.join(dx['reasons'])}</div>", unsafe_allow_html=True)
 
-    # ---------------- Workup + Note ----------------
+    # ------------------------------------------------------------
+    # WORKUP + NOTE
+    # ------------------------------------------------------------
     with col2:
+
         st.subheader("Recommended Workup")
 
         st.write("Baseline studies:")
@@ -711,11 +744,11 @@ if run:
                 st.markdown(f"- [ ] {o}")
 
         st.subheader("Consult Note Draft")
-        st.text_area("Note", note_text, height=380, key="ui_note")
+        st.text_area("Note", note_text, height=380, key="ui_note_text")
         st.download_button(
             "Download note as .txt",
             data=note_text,
             file_name=f"FUO_consult_{datetime.date.today().isoformat()}.txt",
             mime="text/plain",
-            key="btn_download"
+            key="btn_download_note"
         )
