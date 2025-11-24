@@ -455,7 +455,7 @@ def build_note(inputs, active, orders):
 
 # Final line
     lines.append(
-        f"{age} year old {sex}{immune_text} with prolonged fever without a clear source."
+        f"{age} year old {sex}{immune_text} presenting with prolonged fever without a clear source."
     )
 
     lines.append(
