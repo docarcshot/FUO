@@ -324,40 +324,55 @@ def build_note(inputs, active, orders):
     if inputs["prior_neg"]:
         lines.append("Prior negative testing includes: " + ", ".join(inputs["prior_neg"]) + ".")
 
-    # Organic differential summary
+    # Organic differential summary with category collapsing
     lines.append("")
     lines.append("Assessment and differential:")
     lines.append("")
 
     if active:
-        # Sort descending by score
         sorted_dx = sorted(active, key=lambda x: x["score"], reverse=True)
-
         top_score = sorted_dx[0]["score"]
 
-        high = [d["dx"] for d in sorted_dx if d["score"] == top_score]
-        mid = [d["dx"] for d in sorted_dx if 1 < d["score"] < top_score]
-        low = [d["dx"] for d in sorted_dx if d["score"] == 1]
+        high = [d for d in sorted_dx if d["score"] == top_score]
+        mid = [d for d in sorted_dx if 1 < d["score"] < top_score]
+        low = [d for d in sorted_dx if d["score"] == 1]
 
+        # HIGH — list individual diagnoses
         if high:
-            high_str = ", ".join(high)
-            lines.append(f"Symptoms seem most consistent with {high_str} based on the current findings.")
+            names = ", ".join([d["dx"] for d in high])
+            lines.append(f"Symptoms seem most consistent with {names} based on the current findings.")
 
+        # MID — collapse into categories instead of listing everything
         if mid:
-            mid_str = ", ".join(mid)
-            lines.append(f"{mid_str} remain possible but are not strongly supported at this time.")
+            mid_cats = {}
+            for d in mid:
+                mid_cats.setdefault(d["cat"], 0)
+                mid_cats[d["cat"]] += 1
 
+            mid_phrases = []
+            if "Endemic" in mid_cats:
+                mid_phrases.append("endemic fungal infections")
+            if "Infectious" in mid_cats:
+                mid_phrases.append("other infectious etiologies")
+            if "Rheumatologic" in mid_cats:
+                mid_phrases.append("autoimmune or inflammatory disease")
+            if "Malignancy" in mid_cats:
+                mid_phrases.append("indolent malignancy")
+
+            if mid_phrases:
+                mid_str = ", ".join(mid_phrases)
+                lines.append(f"{mid_str.capitalize()} remain possible but are not strongly supported at this stage.")
+
+        # LOW — if many, collapse into a single statement
         if low:
-            low_str = ", ".join(low)
-            lines.append(f"{low_str} appear unlikely given the available information.")
+            if len(low) <= 2:
+                low_str = ", ".join([d["dx"] for d in low])
+                lines.append(f"{low_str} appear unlikely given the available information.")
+            else:
+                lines.append("Other infectious causes appear unlikely based on the current pattern.")
 
     else:
         lines.append("No syndromic patterns identified; broad FUO differential remains.")
-
-
-    # Red flag documentation (C1)
-    lines.append("")
-    lines.append("No current findings concerning for meningitis, severe sepsis, airway compromise, or other indications for emergent inpatient evaluation based on available information.")
 
     # Plan
     lines.append("")
