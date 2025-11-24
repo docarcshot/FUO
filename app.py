@@ -622,7 +622,18 @@ st.title("ID-CDSS | FUO Engine v2")
 
 if run:
     positives = []
+    if immune == "Transplant":
+        positives.append("Transplant")
+        if transplant_type:
+            positives.append(f"Transplant type: {transplant_type}")
 
+        # Gate for early post-transplant high-risk infectious period (<6 months)
+        if transplant_time is not None:
+            if transplant_time < 6:
+                positives.append("Recent transplant (<6 months)")
+            elif transplant_time < 12:
+                positives.append("Transplant <1 year")
+    
     # Build positives list
     if night_sweats: positives.append("Night sweats")
     if weight_loss: positives.append("Weight loss")
