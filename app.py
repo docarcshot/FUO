@@ -485,10 +485,9 @@ with st.sidebar:
     st.title("FUO Engine")
 
     if st.button("Clear all inputs"):
-        # Create a fresh namespace so all widgets reset gracefully
         for key in list(st.session_state.keys()):
             del st.session_state[key]
-        st.experimental_rerun()
+        st.rerun()
 
     st.header("Patient Data")
     c1, c2 = st.columns(2)
