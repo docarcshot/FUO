@@ -435,8 +435,10 @@ def build_note(inputs, active, orders):
     lines.append(f"Date: {today}")
     # Immune-status descriptor for note
     immune_text = ""
+    
     if inputs["immune"] == "HIV" and inputs["cd4"] is not None:
         immune_text = f" with HIV (CD4 {inputs['cd4']})"
+    
     elif inputs["immune"] == "Transplant" and inputs["transplant_type"]:
         if inputs.get("time_since_tx") is not None:
             immune_text = (
@@ -444,8 +446,10 @@ def build_note(inputs, active, orders):
                 f"{inputs['time_since_tx']} months ago"
             )
         else:
-            immune_text = f" with {inputs['transplant_type'].lower()} transplant"
-        )
+            immune_text = (
+                f" with {inputs['transplant_type'].lower()} transplant"
+            )
+            
     elif inputs["immune"] in ["Biologics", "Chemotherapy"]:
         immune_text = f" on {inputs['immune'].lower()}"
 
