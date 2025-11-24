@@ -58,6 +58,7 @@ SHORT_NAME = {
     "Cryptococcosis (fungemia or early dissemination)": "Crypto",
     "Cryptococcal meningitis": "Crypto meningitis",
     "Disseminated MAC": "MAC",
+    "Inflammatory bowel disease (IBD flare)": "IBD flare",
     "Temporal arteritis (GCA)": "GCA",
     "Adult Still disease": "Still's",
     "Lymphoma or occult malignancy": "Lymphoma",
@@ -255,6 +256,23 @@ DISEASES = [
         ]
     },
 
+    {
+        "dx": "Inflammatory bowel disease (IBD flare)",
+        "cat": "Noninfectious",
+        "triggers": [
+            "Abdominal pain",
+            "Diarrhea",
+            "Weight loss",
+            "Transaminitis"
+        ],
+        "orders": [
+            ("CRP", 0),
+            ("Stool calprotectin", 1),
+            ("CT abdomen/pelvis with contrast or MR enterography", 2),
+            ("GI consult", 3)
+        ]
+    },
+    
     {
         "dx": "Drug fever",
         "cat": "Noninfectious",
