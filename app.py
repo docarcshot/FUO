@@ -791,6 +791,7 @@ if run:
         "age": age,
         "sex": sex,
         "immune": immune,
+        "time_since_tx": time_since_tx,
         "cd4": cd4,
         "tmax": tmax,
         "hr": hr,
