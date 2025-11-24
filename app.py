@@ -447,9 +447,9 @@ def build_note(inputs, active, orders):
         immune_text = f" on {inputs['immune'].lower()}"
 
 # Final line
-lines.append(
-    f"{age} year old {sex}{immune_text} with prolonged fever without a clear source."
-)
+    lines.append(
+        f"{age} year old {sex}{immune_text} with prolonged fever without a clear source."
+    )
 
     lines.append(
         f"Tmax {inputs['tmax']} F with heart rate {inputs['hr']} bpm at peak. "
