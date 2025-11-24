@@ -283,64 +283,71 @@ def build_note(inputs, active, orders):
     lines = []
     today = datetime.date.today().isoformat()
 
+    # Header
     lines.append(f"Date: {today}")
-    intro = f"{inputs['age']} year old {inputs['sex']} with fever of unknown origin"
+    intro = f"{inputs['age']} year old {inputs['sex']} with prolonged fever without a clear source."
     if inputs["immune"] != "Immunocompetent":
-        intro += f" with {inputs['immune'].lower()}."
-    else:
-        intro += "."
+        intro += f" Immune status noted: {inputs['immune'].lower()}."
     lines.append(intro)
 
+    # Fever profile
     lines.append(
-        f"Fever duration {inputs['fever_days']} days, Tmax {inputs['tmax']} F, HR at Tmax {inputs['hr']} bpm."
+        f"Tmax {inputs['tmax']} F with heart rate {inputs['hr']} bpm at peak. Fever has been present for {inputs['fever_days']} days."
     )
 
+    # Faget
     if has_faget(inputs["tmax"], inputs["hr"]):
-        lines.append("Relative bradycardia present (possible Faget sign).")
+        lines.append("Relative bradycardia noted, which can be seen with select infections.")
 
-    # Context
+    # Key features
     if inputs["positives"]:
-        lines.append("Key features: " + ", ".join(sorted(inputs["positives"])) + ".")
+        lines.append("Features reported include: " + ", ".join(sorted(inputs["positives"])) + ".")
     else:
-        lines.append("No focal symptoms or exposures identified.")
+        lines.append("No focal symptoms or exposures reported.")
 
+    # Prior negatives
     if inputs["prior_neg"]:
-        lines.append("Prior negative workup: " + ", ".join(inputs["prior_neg"]) + ".")
+        lines.append("Prior negative testing includes: " + ", ".join(inputs["prior_neg"]) + ".")
 
     lines.append("")
     lines.append("Assessment and differential:")
 
+    # Differential
     if not active:
-        lines.append("- Persistent FUO without clear syndromic direction.")
+        lines.append("- No syndromic pattern identified at this time.")
     else:
-        # Group by category
+        # group by category
         grouped = {}
         for dx in active:
             grouped.setdefault(dx["cat"], []).append(dx)
 
-        # Ordered categories
         cat_order = ["Infectious", "Endemic", "Immunocompromised", "Rheumatologic", "Malignancy", "Noninfectious"]
 
         for cat in cat_order:
             if cat in grouped:
                 lines.append(f"{cat}:")
                 for dx in sorted(grouped[cat], key=lambda x: x["score"], reverse=True):
-                    r_str = ", ".join(sorted(dx["reasons"])) if dx["reasons"] else "clinical context"
-                    lines.append(f"- {dx['dx']} (supported by {r_str})")
+                    trigger_text = ", ".join(sorted(dx["reasons"])) if dx["reasons"] else "clinical pattern"
+                    lines.append(f"- {dx['dx']} (supported by {trigger_text})")
 
+    # Red flag documentation (C1)
+    lines.append("")
+    lines.append("No current findings concerning for meningitis, severe sepsis, airway compromise, or other indications for emergent inpatient evaluation based on available information.")
+
+    # Plan
     lines.append("")
     lines.append("Plan:")
 
     # Tier 0
     if orders[0]:
-        lines.append("Baseline tests:")
+        lines.append("Baseline studies:")
         for o in sorted(orders[0]):
             lines.append(f"- [ ] {o}")
 
     # Tier 1
     if orders[1]:
         lines.append("")
-        lines.append("Targeted labs:")
+        lines.append("Targeted testing:")
         for o in sorted(orders[1]):
             lines.append(f"- [ ] {o}")
 
@@ -354,12 +361,11 @@ def build_note(inputs, active, orders):
     # Tier 3
     if orders[3]:
         lines.append("")
-        lines.append("Advanced or invasive diagnostics:")
+        lines.append("Advanced diagnostics:")
         for o in sorted(orders[3]):
             lines.append(f"- [ ] {o}")
 
     return "\n".join(lines)
-
 
 # --- DIFFERENTIAL RENDERING (OPTION 3 CONTAINERS) ---
 def render_dx_block(dx):
