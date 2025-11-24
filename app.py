@@ -43,6 +43,13 @@ st.markdown("""
 def has_faget(tmax_f, hr):
     return tmax_f >= 102.0 and hr < 100
 
+def ebv_risk(inputs):
+    """Return True if transplant type is high-risk for EBV-driven PTLD."""
+    t = inputs.get("transplant_type")
+    if not t:
+        return False
+    return t in ["Liver", "Heart", "Lung", "Multi-organ"]
+
 def neuro_flag(inputs):
     return ("Headache" in inputs["positives"] and "Vision changes" in inputs["positives"]) or ("Seizures" in inputs["positives"])
 
@@ -65,6 +72,43 @@ DISEASES = [
         "cat": "Infectious",
         "triggers": ["New murmur", "IV drug use", "Prosthetic valve", "Embolic phenomena"],
         "orders": [("Blood cultures x3", 0), ("TTE", 1), ("TEE", 3)]
+    },
+    {
+    "dx": "Post-transplant lymphoproliferative disorder (PTLD)",
+    "cat": "Malignancy",
+    "requires_transplant": True,
+    "triggers": [
+        "Lymphadenopathy",
+        "Splenomegaly",
+        "Weight loss",
+        "Night sweats",
+        "Recent transplant (<6 months)",
+        "Transplant <1 year",
+        "EBV-risk transplant"
+    ],
+    "orders": [
+        ("LDH", 1),
+        ("EBV DNA PCR", 1),
+        ("CT chest/abdomen/pelvis with contrast", 2),
+        ("Bone marrow biopsy (consider if cytopenias or persistent adenopathy)", 3)
+    ]
+    },
+    {
+    "dx": "Post-transplant lymphoproliferative disorder (PTLD)",
+    "cat": "Malignancy",
+    "triggers": [
+        "Transplant",
+        "Lymphadenopathy",
+        "Splenomegaly",
+        "Recent transplant (<6 months)",
+        "Transplant <1 year"
+    ],
+    "orders": [
+        ("LDH", 1),
+        ("EBV DNA PCR", 1),
+        ("CT chest/abdomen/pelvis with contrast", 2),
+        ("Bone marrow biopsy", 3)
+    ]
     },
     {
         "dx": "Tuberculosis (miliary or extrapulmonary)",
@@ -195,6 +239,22 @@ def build_differential(inputs):
     immune = inputs["immune"]
     cd4 = inputs.get("cd4")
     age = inputs["age"]
+
+    # PTLD gating
+    if d.get("requires_transplant") and inputs["immune"] != "Transplant":
+        continue
+    
+    # Add dynamic triggers
+    if inputs["immune"] == "Transplant":
+        if inputs["transplant_months"] is not None:
+            if inputs["transplant_months"] < 6:
+                positives.add("Recent transplant (<6 months)")
+            if inputs["transplant_months"] <= 12:
+                positives.add("Transplant <1 year")
+    
+    # EBV-risk transplant flag
+    if ebv_risk(inputs):
+        positives.add("EBV-risk transplant")
 
     # Derived immuno flags
     risk_hiv = immune == "HIV"
@@ -502,31 +562,18 @@ with st.sidebar:
     transplant_type = None
     transplant_time = None
 
-    if immune == "Transplant":
-        st.subheader("Transplant Details")
-
-        transplant_type = st.selectbox(
-            "Type of transplant",
-            [
-                "Kidney",
-                "Liver",
-                "Heart",
-                "Lung",
-                "Pancreas",
-                "Small bowel",
-                "Hematopoietic stem cell (HSCT)",
-                "Other solid organ"
-            ],
-            key="ui_transplant_type"
-        )
-
-        transplant_time = st.number_input(
-            "Time since transplant (months)",
-            min_value=0,
-            max_value=600,
-            value=12,
-            key="ui_transplant_time"
-        )
+if immune == "Transplant":
+    transplant_type = st.selectbox(
+        "Transplant type",
+        ["Kidney", "Liver", "Heart", "Lung", "Multi-organ"]
+    )
+    transplant_months = st.number_input(
+        "Months since transplant",
+        min_value=0, max_value=240, value=12
+    )
+else:
+    transplant_type = None
+    transplant_months = None
         
     cd4 = None
     if immune == "HIV":
@@ -694,6 +741,8 @@ if run:
         "positives": positives,
         "prior_neg": prior_neg,
         "on_abx": on_abx,
+        "transplant_type": transplant_type,
+        "transplant_months": transplant_months,
     }
 
     active = build_differential(inputs)
