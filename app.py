@@ -64,7 +64,7 @@ DISEASES = [
         "dx": "Infective endocarditis",
         "cat": "Infectious",
         "triggers": ["New murmur", "IV drug use", "Prosthetic valve", "Embolic phenomena"],
-        "orders": [("Blood cultures x3", 0), ("TTE", 1), ("TEE", 2)]
+        "orders": [("Blood cultures x3", 0), ("TTE", 1), ("TEE", 3)]
     },
     {
         "dx": "Tuberculosis (miliary or extrapulmonary)",
@@ -101,7 +101,7 @@ DISEASES = [
         "cat": "Infectious",
         "triggers": ["Headache", "Vision changes", "Seizures", "HIV", "Cirrhosis"],
         "requires_neuro": True,
-        "orders": [("LP with CSF CrAg", 2)]
+        "orders": [("LP with CSF CrAg", 3)]
     },
     {
         "dx": "Bartonella (endocarditis/bacteremia)",
@@ -119,7 +119,7 @@ DISEASES = [
         "dx": "Q fever (Coxiella)",
         "cat": "Infectious",
         "triggers": ["Farm animals", "Parturient animals", "Rural living", "Well water"],
-        "orders": [("Coxiella serology", 1), ("TTE", 1)]
+        "orders": [("Coxiella serology", 1), ("TTE", 1), ("TEE",3)]
     },
     {
         "dx": "Disseminated MAC",
