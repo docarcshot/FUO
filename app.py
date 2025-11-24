@@ -842,27 +842,6 @@ if run:
     # Workup + note
     # ------------------------------------------------------------
     with col2:
-        st.subheader("Recommended Workup")
-
-        st.write("Baseline studies:")
-        for o in sorted(orders[0]):
-            st.markdown(f"- [ ] {o}")
-
-        if orders[1]:
-            st.write("Targeted testing:")
-            for o in sorted(orders[1]):
-                st.markdown(f"- [ ] {o}")
-
-        if orders[2]:
-            st.write("Imaging:")
-            for o in sorted(orders[2]):
-                st.markdown(f"- [ ] {o}")
-
-        if orders[3]:
-            st.write("Advanced diagnostics:")
-            for o in sorted(orders[3]):
-                st.markdown(f"- [ ] {o}")
-
         note_text = build_note(inputs, active, orders)
 
         st.subheader("Consult Note Draft")
