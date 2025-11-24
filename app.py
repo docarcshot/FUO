@@ -433,7 +433,24 @@ def build_note(inputs, active, orders):
 
     lines = []
     lines.append(f"Date: {today}")
-    lines.append(f"{age} year old {sex} with prolonged fever without a clear source.")
+    # Immune-status descriptor for note
+    immune_text = ""
+    if inputs["immune"] == "HIV" and inputs["cd4"] is not None:
+        immune_text = f" with HIV (CD4 {inputs['cd4']})"
+    elif inputs["immune"] == "Transplant" and inputs["transplant_type"]:
+        immune_text = (
+            f" with {inputs['transplant_type'].lower()} transplant "
+            f"{inputs['fever_days']} months ago" if inputs.get("time_since_tx") else
+            f" with {inputs['transplant_type'].lower()} transplant"
+        )
+    elif inputs["immune"] in ["Biologics", "Chemotherapy"]:
+        immune_text = f" on {inputs['immune'].lower()}"
+
+# Final line
+lines.append(
+    f"{age} year old {sex}{immune_text} with prolonged fever without a clear source."
+)
+
     lines.append(
         f"Tmax {inputs['tmax']} F with heart rate {inputs['hr']} bpm at peak. "
         f"Fever has been present for {inputs['fever_days']} days."
