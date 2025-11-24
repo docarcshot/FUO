@@ -299,6 +299,21 @@ def build_note(inputs, active, orders):
     if has_faget(inputs["tmax"], inputs["hr"]):
         lines.append("Relative bradycardia noted, which can be seen with select infections.")
 
+    # Red flag logic (neuro involvement)
+    neuro_warn = any([
+        "Headache" in inputs["positives"],
+        "Vision changes" in inputs["positives"],
+        "Seizures" in inputs["positives"],
+        "Neck stiffness" in inputs["positives"] if "Neck stiffness" in inputs["positives"] else False
+    ])
+
+    lines.append("")
+    if neuro_warn:
+        lines.append("Neurologic symptoms present; consider CNS involvement based on overall exam and course.")
+    else:
+        lines.append("No neurologic features concerning for meningitis based on reported symptoms.")
+
+
     # Key features
     if inputs["positives"]:
         lines.append("Features reported include: " + ", ".join(sorted(inputs["positives"])) + ".")
