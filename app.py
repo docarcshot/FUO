@@ -498,6 +498,36 @@ with st.sidebar:
         ["Immunocompetent", "HIV", "Transplant", "Biologics", "Chemotherapy"],
     )
 
+    # --- TRANSPLANT SUB-FIELDS ---
+    transplant_type = None
+    transplant_time = None
+
+    if immune == "Transplant":
+        st.subheader("Transplant Details")
+
+        transplant_type = st.selectbox(
+            "Type of transplant",
+            [
+                "Kidney",
+                "Liver",
+                "Heart",
+                "Lung",
+                "Pancreas",
+                "Small bowel",
+                "Hematopoietic stem cell (HSCT)",
+                "Other solid organ"
+            ],
+            key="ui_transplant_type"
+        )
+
+        transplant_time = st.number_input(
+            "Time since transplant (months)",
+            min_value=0,
+            max_value=600,
+            value=12,
+            key="ui_transplant_time"
+        )
+        
     cd4 = None
     if immune == "HIV":
         cd4 = st.slider("CD4 count", 0, 1200, 300)
