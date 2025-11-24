@@ -142,11 +142,15 @@ DISEASES = [
         "orders": [("Ferritin", 0), ("ANA", 1), ("RF", 1)]
     },
     {
-        "dx": "Lymphoma or occult malignancy",
-        "cat": "Malignancy",
-        "triggers": ["Weight loss", "Night sweats", "Lymphadenopathy", "Splenomegaly"],
-        "orders": [("LDH", 1), ("CT chest/abdomen/pelvis with contrast", 2)]
-    },
+    "dx": "Lymphoma or occult malignancy",
+    "cat": "Malignancy",
+    "triggers": ["Weight loss", "Night sweats", "Lymphadenopathy", "Splenomegaly"],
+    "orders": [
+        ("LDH", 1),
+        ("CT chest/abdomen/pelvis with contrast", 2),
+        ("Bone marrow biopsy", 3)
+    ]
+},
     {
         "dx": "Drug fever",
         "cat": "Noninfectious",
