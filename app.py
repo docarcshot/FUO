@@ -418,7 +418,15 @@ def build_note(inputs, active, orders):
         lines.append("")
         lines.append("Imaging:")
         for o in sorted(orders[2]):
-            lines.append(f"- [ ] {o}")
+            if o == "Temporal artery ultrasound":
+                if any(k in inputs["positives"] for k in ["Headache", "Jaw claudication", "Vision changes"]):
+                    # already strongly indicated
+                    lines.append(f"- [ ] {o}")
+                else:
+                    # contingent recommendation
+                    lines.append(f"- [ ] {o} (consider if ESR/CRP elevated or symptoms evolve)")
+            else:
+                lines.append(f"- [ ] {o}")
 
     # Tier 3
     if orders[3]:
