@@ -419,11 +419,11 @@ def build_note(inputs, active, orders):
         lines.append("Imaging:")
         for o in sorted(orders[2]):
             if o == "Temporal artery ultrasound":
-                if any(k in inputs["positives"] for k in ["Headache", "Jaw claudication", "Vision changes"]):
-                    # already strongly indicated
+                # If strong GCA features present, list normally.
+                if any(x in inputs["positives"] for x in ["Headache", "Jaw claudication", "Vision changes"]):
                     lines.append(f"- [ ] {o}")
                 else:
-                    # contingent recommendation
+                    # Otherwise add a contingency
                     lines.append(f"- [ ] {o} (consider if ESR/CRP elevated or symptoms evolve)")
             else:
                 lines.append(f"- [ ] {o}")
