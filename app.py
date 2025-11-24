@@ -512,46 +512,56 @@ def render_dx_block(dx):
 with st.sidebar:
     st.title("FUO Engine v3")
 
-    if st.button("Clear all inputs", key="clear_all"):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.experimental_rerun()
+    # Clear button gets a guaranteed unique key
+    if st.button("Clear all inputs", key="btn_clear_all"):
+        for k in list(st.session_state.keys()):
+            del st.session_state[k]
+        st.rerun()
 
-    # Patient details
     st.header("Patient Data")
     c1, c2 = st.columns(2)
-    age = c1.number_input("Age", 18, 100, 55)
-    sex = c2.selectbox("Sex", ["Female", "Male"])
+    age = c1.number_input("Age", 18, 100, 55, key="age")
+    sex = c2.selectbox("Sex", ["Female", "Male"], key="sex")
 
     immune = st.selectbox(
         "Immune status",
-        ["Immunocompetent", "HIV", "Transplant", "Biologics", "Chemotherapy"]
+        ["Immunocompetent", "HIV", "Transplant", "Biologics", "Chemotherapy"],
+        key="immune"
     )
 
+    # HIV-specific
     cd4 = None
     transplant_type = None
     time_since_tx = None
     ebv_status = None
 
-    # HIV block
     if immune == "HIV":
-        cd4 = st.slider("CD4 count", 0, 1200, 300)
+        cd4 = st.slider("CD4 count", 0, 1200, 300, key="cd4")
 
-    # TRANSPLANT BLOCK (Option B)
+    # TRANSPLANT BLOCK
     if immune == "Transplant":
         with st.expander("Transplant details", expanded=True):
             transplant_type = st.selectbox(
                 "Type of transplant",
-                ["Kidney", "Liver", "Lung", "Heart", "HSCT"]
+                ["Kidney", "Liver", "Lung", "Heart", "HSCT"],
+                key="tx_type"
             )
-            time_since_tx = st.number_input("Time since transplant (months)", 0, 600, 12)
-            ebv_status = st.selectbox("EBV status", ["Unknown", "Positive", "Negative"])
+            time_since_tx = st.number_input(
+                "Time since transplant (months)",
+                0, 600, 12,
+                key="time_since_tx"
+            )
+            ebv_status = st.selectbox(
+                "EBV status",
+                ["Unknown", "Positive", "Negative"],
+                key="ebv_status"
+            )
 
     st.header("Fever Profile")
-    tmax = st.number_input("Tmax (F)", 98.0, 107.0, 101.5, step=0.1)
-    hr = st.number_input("Heart rate at Tmax", 40, 170, 95)
-    fever_days = st.number_input("Days of fever", 1, 365, 14)
-    on_abx = st.checkbox("On antibiotics")
+    tmax = st.number_input("Tmax (F)", 98.0, 107.0, 101.5, step=0.1, key="tmax")
+    hr = st.number_input("Heart rate at Tmax", 40, 170, 95, key="hr")
+    fever_days = st.number_input("Days of fever", 1, 365, 14, key="fever_days")
+    on_abx = st.checkbox("On antibiotics", key="on_abx")
 
     # ============================================================
     # ROS
