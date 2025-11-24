@@ -419,11 +419,17 @@ def build_note(inputs, active, orders):
         lines.append("Imaging:")
         for o in sorted(orders[2]):
             if o == "Temporal artery ultrasound":
-                # If strong GCA features present, list normally.
-                if any(x in inputs["positives"] for x in ["Headache", "Jaw claudication", "Vision changes"]):
+                # Strong GCA concern only if age ≥ 50 AND (headache + vision change OR jaw claudication)
+                strong_gca = (
+                    inputs["age"] >= 50
+                    and (
+                        ("Headache" in inputs["positives"] and "Vision changes" in inputs["positives"])
+                        or ("Jaw claudication" in inputs["positives"])
+                    )
+                )
+                if strong_gca:
                     lines.append(f"- [ ] {o}")
                 else:
-                    # Otherwise add a contingency
                     lines.append(f"- [ ] {o} (consider if ESR/CRP elevated or symptoms evolve)")
             else:
                 lines.append(f"- [ ] {o}")
