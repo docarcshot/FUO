@@ -157,8 +157,6 @@ DISEASES = [
 
 # --- SHORTHAND NAME MAP ---
 NAME_MAP = {
-    def short(name):
-    return NAME_MAP.get(name, name)
     "Infective endocarditis": "endocarditis",
     "Tuberculosis (miliary or extrapulmonary)": "TB",
     "Disseminated histoplasmosis": "histo",
@@ -176,6 +174,8 @@ NAME_MAP = {
     "Drug fever": "drug fever"
 }
 
+def short(name: str) -> str:
+    return NAME_MAP.get(name, name)
 
 BASELINE_ORDERS = [
     "CBC with differential",
