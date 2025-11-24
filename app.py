@@ -437,9 +437,20 @@ def build_note(inputs, active, orders):
     # Tier 3
     if orders[3]:
         lines.append("")
-        lines.append("Advanced diagnostics:")
+        lines.append("Advanced or invasive diagnostics:")
         for o in sorted(orders[3]):
-            lines.append(f"- [ ] {o}")
+            if o == "Bone marrow biopsy":
+                # Contingency logic: only strongly recommended with cytopenias or splenomegaly
+                strong_bmb = (
+                    "Pancytopenia" in inputs["positives"]
+                    or "Splenomegaly" in inputs["positives"]
+                )
+                if strong_bmb:
+                    lines.append(f"- [ ] {o}")
+                else:
+                    lines.append(f"- [ ] {o} (consider if cytopenias persist or worsen)")
+            else:
+                lines.append(f"- [ ] {o}")
 
     return "\n".join(lines)
 
@@ -521,6 +532,7 @@ with st.sidebar:
         arthralgia = st.checkbox("Joint pain")
         back_pain = st.checkbox("Back pain")
         myalgia = st.checkbox("Myalgias")
+        jaw_claudication = st.checkbox("Jaw claudication")
 
     with st.expander("Skin findings", expanded=True):
         rash = st.checkbox("Rash")
@@ -596,6 +608,7 @@ if run:
     if arthralgia: positives.append("Arthralgia")
     if back_pain: positives.append("Back pain")
     if myalgia: positives.append("Myalgias")
+    if jaw_claudication: positives.append("Jaw claudication")
 
     if rash: positives.append("Rash")
     if palmar_rash: positives.append("Palms/soles rash")
