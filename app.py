@@ -773,7 +773,7 @@ def render_dx_block(dx):
 with st.sidebar:
     st.title("FUO Engine v3")
 
-    if st.button("Clear all inputs"):
+    if st.button("Clear all inputs", key="clear_all"):
         for k in list(st.session_state.keys()):
             del st.session_state[k]
         st.experimental_rerun()
