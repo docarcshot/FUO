@@ -155,6 +155,28 @@ DISEASES = [
     }
 ]
 
+# --- SHORTHAND NAME MAP ---
+NAME_MAP = {
+    def short(name):
+    return NAME_MAP.get(name, name)
+    "Infective endocarditis": "endocarditis",
+    "Tuberculosis (miliary or extrapulmonary)": "TB",
+    "Disseminated histoplasmosis": "histo",
+    "Blastomycosis": "blasto",
+    "Coccidioidomycosis": "cocci",
+    "Cryptococcosis (fungemia or early dissemination)": "crypto",
+    "Cryptococcal meningitis": "crypto meningitis",
+    "Bartonella (endocarditis/bacteremia)": "bartonella",
+    "Brucellosis": "brucella",
+    "Q fever (Coxiella)": "Q fever",
+    "Disseminated MAC": "MAC",
+    "Temporal arteritis (GCA)": "GCA",
+    "Adult Still disease": "Still’s",
+    "Lymphoma or occult malignancy": "lymphoma",
+    "Drug fever": "drug fever"
+}
+
+
 BASELINE_ORDERS = [
     "CBC with differential",
     "CMP",
@@ -339,7 +361,7 @@ def build_note(inputs, active, orders):
 
         # HIGH — list individual diagnoses
         if high:
-            names = ", ".join([d["dx"] for d in high])
+            names = ", ".join([short(d["dx"]) for d in high])
             lines.append(f"Symptoms seem most consistent with {names} based on the current findings.")
 
         # MID — collapse into categories instead of listing everything
@@ -366,7 +388,7 @@ def build_note(inputs, active, orders):
         # LOW — if many, collapse into a single statement
         if low:
             if len(low) <= 2:
-                low_str = ", ".join([d["dx"] for d in low])
+                low_str = ", ".join([short(d["dx"]) for d in low])
                 lines.append(f"{low_str} appear unlikely given the available information.")
             else:
                 lines.append("Other infectious causes appear unlikely based on the current pattern.")
