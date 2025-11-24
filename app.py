@@ -324,26 +324,36 @@ def build_note(inputs, active, orders):
     if inputs["prior_neg"]:
         lines.append("Prior negative testing includes: " + ", ".join(inputs["prior_neg"]) + ".")
 
+    # Organic differential summary
     lines.append("")
     lines.append("Assessment and differential:")
+    lines.append("")
 
-    # Differential
-    if not active:
-        lines.append("- No syndromic pattern identified at this time.")
+    if active:
+        # Sort descending by score
+        sorted_dx = sorted(active, key=lambda x: x["score"], reverse=True)
+
+        top_score = sorted_dx[0]["score"]
+
+        high = [d["dx"] for d in sorted_dx if d["score"] == top_score]
+        mid = [d["dx"] for d in sorted_dx if 1 < d["score"] < top_score]
+        low = [d["dx"] for d in sorted_dx if d["score"] == 1]
+
+        if high:
+            high_str = ", ".join(high)
+            lines.append(f"Symptoms seem most consistent with {high_str} based on the current findings.")
+
+        if mid:
+            mid_str = ", ".join(mid)
+            lines.append(f"{mid_str} remain possible but are not strongly supported at this time.")
+
+        if low:
+            low_str = ", ".join(low)
+            lines.append(f"{low_str} appear unlikely given the available information.")
+
     else:
-        # group by category
-        grouped = {}
-        for dx in active:
-            grouped.setdefault(dx["cat"], []).append(dx)
+        lines.append("No syndromic patterns identified; broad FUO differential remains.")
 
-        cat_order = ["Infectious", "Endemic", "Immunocompromised", "Rheumatologic", "Malignancy", "Noninfectious"]
-
-        for cat in cat_order:
-            if cat in grouped:
-                lines.append(f"{cat}:")
-                for dx in sorted(grouped[cat], key=lambda x: x["score"], reverse=True):
-                    trigger_text = ", ".join(sorted(dx["reasons"])) if dx["reasons"] else "clinical pattern"
-                    lines.append(f"- {dx['dx']} (supported by {trigger_text})")
 
     # Red flag documentation (C1)
     lines.append("")
